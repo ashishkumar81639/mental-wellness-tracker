@@ -1,17 +1,16 @@
 import { reframeSystemPrompt } from "@/lib/prompts/reframe";
 import { DEEPSEEK_API_KEY } from "@/lib/env";
+import type { ExamType } from "@/lib/utils";
 
 // The API may route deepseek-chat to deepseek-v4-flash; this is expected and does not affect functionality.
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 const LLM_TIMEOUT_MS = 20000;
 
 export async function reframeThought(
-  examType: string,
+  examType: ExamType,
   thought: string
 ): Promise<string> {
-  const systemPrompt = reframeSystemPrompt(
-    examType as Parameters<typeof reframeSystemPrompt>[0]
-  );
+  const systemPrompt = reframeSystemPrompt(examType);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);

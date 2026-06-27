@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { reframeThought } from "@/lib/agents/reframe";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { coerceExamType } from "@/lib/utils";
 
 const ReframeInput = z.object({
   thought: z.string().min(5).max(2000),
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
 
     let reframe: string;
     try {
-      reframe = await reframeThought(users[0].exam_type, thought);
+      reframe = await reframeThought(coerceExamType(users[0].exam_type), thought);
     } catch (err) {
       console.error("Reframe LLM error:", err);
       reframe =

@@ -1,12 +1,4 @@
-export type ExamType =
-  | "NEET"
-  | "JEE"
-  | "CUET"
-  | "CAT"
-  | "GATE"
-  | "UPSC"
-  | "boards"
-  | "other";
+import type { ExamType } from "@/lib/utils";
 
 interface AgeProfile {
   ageGroup: string;

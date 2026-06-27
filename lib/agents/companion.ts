@@ -1,5 +1,6 @@
 import { companionSystemPrompt } from "@/lib/prompts/companion";
 import { DEEPSEEK_API_KEY } from "@/lib/env";
+import type { ExamType } from "@/lib/utils";
 
 // The API may route deepseek-chat to deepseek-v4-flash; this is expected behaviour and does not affect functionality.
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -17,7 +18,7 @@ interface JournalSummary {
   summary: string;
 }
 
-function buildCompanionMessages(
+export function buildCompanionMessages(
   systemPrompt: string,
   recentJournals: JournalSummary[],
   chatHistory: ChatMessage[],
@@ -51,7 +52,7 @@ function buildCompanionMessages(
 }
 
 export async function* streamCompanionReply(
-  examType: string,
+  examType: ExamType,
   studentName: string,
   recentJournals: JournalSummary[],
   chatHistory: ChatMessage[],
@@ -60,7 +61,7 @@ export async function* streamCompanionReply(
   latestEmotion?: string | null
 ): AsyncGenerator<string, void, unknown> {
   const systemPrompt = companionSystemPrompt(
-    examType as Parameters<typeof companionSystemPrompt>[0],
+    examType,
     studentName,
     latestMood,
     latestEmotion

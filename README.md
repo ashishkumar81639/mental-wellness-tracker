@@ -69,11 +69,14 @@ npm run dev
 ## Testing
 
 ```bash
-# Smoke test the analysis pipeline
-npm run check
+# Run unit tests (pure logic - no DB or API key needed)
+npm test
 
-# Run unit tests
-npx vitest run
+# Unit tests with coverage
+npm run test:cov
+
+# Smoke test the analysis pipeline (needs the dev server + a real DB/API key)
+npm run check
 
 # Build check
 npm run build
@@ -81,3 +84,5 @@ npm run build
 # Lint
 npm run lint
 ```
+
+Tests are intentionally decoupled from the runtime: all core logic lives in pure functions under `lib/utils.ts`, so `npm test` runs without a database or API key.

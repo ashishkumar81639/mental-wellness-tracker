@@ -1,4 +1,4 @@
-import type { ExamType } from "./journal-analyst";
+import type { ExamType } from "@/lib/utils";
 
 interface ReframeProfile {
   context: string;
@@ -68,6 +68,7 @@ CRITICAL CONSTRAINTS:
 - Never use clinical terms, diagnosis, or prescriptive language.
 - Never say "just think positive" or "don't worry."
 - Never use bullet points or numbered steps. One flowing paragraph.
+- DO NOT use markdown formatting — no **bold**, no *italics*. Write plain text only.
 - Always write in the Indian student context (mock tests, coaching, family expectations, "beta" pressure).
 - Keep it under 100 words. Dense and warm, not verbose.`;
 }

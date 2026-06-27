@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { formatChatText } from "@/lib/format-chat";
 
 interface Message {
   role: "user" | "assistant";
@@ -157,7 +158,7 @@ export default function ChatPage() {
                 }`}
               >
                 <p className="text-body-sm whitespace-pre-wrap">
-                  {msg.content}
+                  {formatChatText(msg.content)}
                 </p>
               </div>
             </div>
@@ -167,7 +168,7 @@ export default function ChatPage() {
             <div className="flex justify-start">
               <div className="max-w-[80%] bg-surface-card rounded-lg px-lg py-md">
                 <p className="text-body-sm whitespace-pre-wrap">
-                  {streamedText}
+                  {formatChatText(streamedText)}
                   <span className="animate-pulse text-primary">|</span>
                 </p>
               </div>

@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { analyseJournal } from "@/lib/agents/journal-analyst";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { coerceExamType } from "@/lib/utils";
 
 const CheckInInput = z.object({
   body: z.string().min(10).max(5000),
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
     if (users.length === 0) {
       return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
     }
-    const examType = users[0].exam_type;
+    const examType = coerceExamType(users[0].exam_type);
 
     const entryRows = await sql`
       INSERT INTO journal_entries (user_id, body)
@@ -95,13 +96,15 @@ export async function POST(req: Request) {
     const analysisId = analysisRows[0].id;
 
     if (analysis.triggers.length > 0) {
-      // sprint: batch insert with a single query. Fine for <10 triggers per entry.
-      for (const t of analysis.triggers) {
-        await sql`
-          INSERT INTO triggers (analysis_id, label, category, sentiment)
-          VALUES (${analysisId}, ${t.label}, ${t.category}, ${t.sentiment})
-        `;
-      }
+      // Single batched insert via UNNEST instead of one round-trip per trigger.
+      const labels = analysis.triggers.map((t) => t.label);
+      const categories = analysis.triggers.map((t) => t.category);
+      const sentiments = analysis.triggers.map((t) => t.sentiment);
+      await sql`
+        INSERT INTO triggers (analysis_id, label, category, sentiment)
+        SELECT ${analysisId}, *
+        FROM UNNEST(${labels}::text[], ${categories}::text[], ${sentiments}::int[])
+      `;
     }
 
     return NextResponse.json({

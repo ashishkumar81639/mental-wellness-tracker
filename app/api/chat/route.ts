@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { streamCompanionReply } from "@/lib/agents/companion";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { coerceExamType } from "@/lib/utils";
 
 const ChatInput = z.object({
   message: z.string().min(1).max(3000),
@@ -35,26 +36,44 @@ export async function POST(req: Request) {
 
     const { message } = parsed.data;
 
-    const users = await sql`
-      SELECT name, exam_type FROM users WHERE id = ${username}
-    `;
+    // These four reads only depend on the user id - run them in parallel.
+    const [users, journals, chatRows, latestMood] = await Promise.all([
+      sql`SELECT name, exam_type FROM users WHERE id = ${username}`,
+      // Recent journal summaries (last 7 entries for context)
+      sql`
+        SELECT je.created_at::date AS date, aa.emotion, aa.summary
+        FROM journal_entries je
+        LEFT JOIN ai_analysis aa ON aa.entry_id = je.id
+        WHERE je.user_id = ${username}
+        ORDER BY je.created_at DESC
+        LIMIT 7
+      `,
+      // M1: latest 15 messages (DESC then reverse for chronological order)
+      sql`
+        SELECT role, content, created_at::text AS created_at
+        FROM chat_messages
+        WHERE user_id = ${username}
+        ORDER BY created_at DESC
+        LIMIT 15
+      `,
+      // m4: FR10 state-adaptive persona - latest mood + emotion
+      sql`
+        SELECT ml.mood, aa.emotion
+        FROM mood_logs ml
+        JOIN journal_entries je ON ml.entry_id = je.id
+        LEFT JOIN ai_analysis aa ON aa.entry_id = je.id
+        WHERE je.user_id = ${username}
+          AND aa.emotion IS NOT NULL
+        ORDER BY je.created_at DESC
+        LIMIT 1
+      `,
+    ]);
+
     if (users.length === 0) {
       return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
     }
-    const { name, exam_type } = users[0];
-
-    // Get recent journal summaries (last 7 entries for context)
-    const journals = await sql`
-      SELECT
-        je.created_at::date AS date,
-        aa.emotion,
-        aa.summary
-      FROM journal_entries je
-      LEFT JOIN ai_analysis aa ON aa.entry_id = je.id
-      WHERE je.user_id = ${username}
-      ORDER BY je.created_at DESC
-      LIMIT 7
-    `;
+    const { name } = users[0];
+    const examType = coerceExamType(users[0].exam_type);
 
     const recentJournals = journals
       .filter((j) => j.emotion)
@@ -64,15 +83,6 @@ export async function POST(req: Request) {
         summary: j.summary,
       }));
 
-    // M1: fetch latest 15 messages (DESC then reverse for chronological order)
-    const chatRows = await sql`
-      SELECT role, content, created_at::text AS created_at
-      FROM chat_messages
-      WHERE user_id = ${username}
-      ORDER BY created_at DESC
-      LIMIT 15
-    `;
-
     const chatHistory = chatRows
       .reverse()
       .map((r) => ({
@@ -80,18 +90,6 @@ export async function POST(req: Request) {
         content: r.content,
         created_at: r.created_at,
       }));
-
-    // m4: FR10 state-adaptive persona. Pass latest mood + emotion to the companion.
-    const latestMood = await sql`
-      SELECT ml.mood, aa.emotion
-      FROM mood_logs ml
-      JOIN journal_entries je ON ml.entry_id = je.id
-      LEFT JOIN ai_analysis aa ON aa.entry_id = je.id
-      WHERE je.user_id = ${username}
-        AND aa.emotion IS NOT NULL
-      ORDER BY je.created_at DESC
-      LIMIT 1
-    `;
 
     const currentMood = latestMood.length > 0 ? Number(latestMood[0].mood) : null;
     const currentEmotion = latestMood.length > 0 ? (latestMood[0].emotion as string) : null;
@@ -108,7 +106,7 @@ export async function POST(req: Request) {
       async start(controller) {
         try {
           for await (const token of streamCompanionReply(
-            exam_type,
+            examType,
             name,
             recentJournals,
             chatHistory,

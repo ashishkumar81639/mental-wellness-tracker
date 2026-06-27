@@ -1,4 +1,4 @@
-import type { ExamType } from "./journal-analyst";
+import type { ExamType } from "@/lib/utils";
 
 interface ToneProfile {
   tone: string;
@@ -128,7 +128,9 @@ CONTEXT YOU'LL RECEIVE before each user message:
 - The last few chat messages between you and the student (provided as real message turns, not as a context block)
 
 Use this context to make your responses feel personal and grounded in their actual journey.
-Keep responses warm, concise, and Indian-student-real. No generic "you've got this" without substance.`;
+Keep responses warm, concise, and Indian-student-real. No generic "you've got this" without substance.
+
+FORMAT: Write in plain conversational text only. DO NOT use markdown formatting — no **bold**, no *italics*, no bullet points, no numbered lists, no headings. Just natural flowing sentences like you're talking to a friend over chai.`;
 
   return prompt;
 }

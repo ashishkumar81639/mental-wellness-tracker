@@ -35,5 +35,9 @@ review.md
 # Build artifacts
 tsconfig.tsbuildinfo
 
+# Test coverage
+coverage/
+
 # Playwright test artifacts
 .playwright-mcp/
+.vercel

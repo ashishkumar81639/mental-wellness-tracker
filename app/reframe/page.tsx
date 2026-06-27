@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { formatChatText } from "@/lib/format-chat";
 
 export default function ReframePage() {
   const router = useRouter();
@@ -108,7 +109,7 @@ export default function ReframePage() {
               Reframed perspective
             </h3>
             <p className="text-body-md text-body-strong leading-relaxed">
-              {reframe}
+              {formatChatText(reframe)}
             </p>
           </div>
         )}
