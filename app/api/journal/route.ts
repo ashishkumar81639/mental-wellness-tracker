@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { requireAuth } from "@/lib/route-utils";
+import { requireAuth, jsonError, cachedJson } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
-
-const QuerySchema = z.object({
-  days: z.coerce.number().int().min(1).max(90).default(7),
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-});
+import { JournalQuery } from "@/lib/schemas";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -16,17 +10,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const parsed = QuerySchema.safeParse({
+    const parsed = JournalQuery.safeParse({
       days: searchParams.get("days") ?? undefined,
       offset: searchParams.get("offset") ?? undefined,
       limit: searchParams.get("limit") ?? undefined,
     });
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid query params", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+      return jsonError("VALIDATION_ERROR", "Invalid query params", 400);
     }
 
     const { days, offset, limit } = parsed.data;
@@ -73,12 +64,9 @@ export async function GET(req: NextRequest) {
         : null,
     }));
 
-    return NextResponse.json({ entries });
+    return cachedJson({ entries });
   } catch (err) {
     console.error("Journal fetch error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

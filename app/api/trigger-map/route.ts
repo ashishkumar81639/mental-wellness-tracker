@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/route-utils";
+import { requireAuth, jsonError, cachedJson } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 
 export async function GET(req: Request) {
@@ -64,12 +64,9 @@ export async function GET(req: Request) {
       return { from, to, weight };
     });
 
-    return NextResponse.json({ nodes, edges });
+    return cachedJson({ nodes, edges });
   } catch (err) {
     console.error("Trigger map error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

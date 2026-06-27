@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/route-utils";
+import { requireAuth, jsonError, cachedJson } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import {
   averageMood,
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     ]);
 
     if (users.length === 0) {
-      return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+      return jsonError("NOT_FOUND", "User not found", 404);
     }
 
     const { exam_type, exam_date } = users[0];
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     const forecast = buildStressForecast(avgMood, examDate, today);
     const preloadedCoping = preloadedCopingFor(daysLeft);
 
-    return NextResponse.json({
+    return cachedJson({
       exam_type,
       exam_date: examDate ? examDate.toISOString().split("T")[0] : null,
       days_left: daysLeft,
@@ -48,9 +48,6 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     console.error("Exam countdown error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

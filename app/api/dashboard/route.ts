@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/route-utils";
+import { requireAuth, jsonError, cachedJson } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { calculateStreak } from "@/lib/utils";
 
@@ -81,17 +81,9 @@ export async function GET(req: NextRequest) {
       streakRows.map((r) => ({ entry_date: r.entry_date.toISOString().split("T")[0] }))
     );
 
-    return NextResponse.json({
-      moodTrend,
-      topTriggers,
-      emotionDistribution,
-      streak,
-    });
+    return cachedJson({ moodTrend, topTriggers, emotionDistribution, streak });
   } catch (err) {
     console.error("Dashboard error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

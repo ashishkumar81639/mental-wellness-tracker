@@ -1,32 +1,17 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { verifyPassword, signToken } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { checkRateLimit } from "@/lib/rate-limit";
-
-const LoginInput = z.object({
-  username: z.string().min(1),
-  password: z.string().min(1),
-});
+import { jsonError, rateLimit } from "@/lib/route-utils";
+import { LoginInput } from "@/lib/schemas";
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(req, "auth:login");
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests", code: "RATE_LIMITED" },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
-    );
-  }
+  const limited = rateLimit(req, "auth:login");
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
-    const parsed = LoginInput.safeParse(body);
-
+    const parsed = LoginInput.safeParse(await req.json());
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid input", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+      return jsonError("VALIDATION_ERROR", "Invalid input", 400);
     }
 
     const { username, password } = parsed.data;
@@ -36,21 +21,15 @@ export async function POST(req: Request) {
       FROM users WHERE id = ${username}
     `;
 
-    if (rows.length === 0) {
-      return NextResponse.json(
-        { error: "Invalid username or password", code: "UNAUTHORIZED" },
-        { status: 401 }
-      );
-    }
-
+    // Compare against the hash (or a dummy) so timing does not reveal whether
+    // the username exists.
     const user = rows[0];
-    const valid = await verifyPassword(password, user.password_hash);
+    const valid = user
+      ? await verifyPassword(password, user.password_hash)
+      : false;
 
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Invalid username or password", code: "UNAUTHORIZED" },
-        { status: 401 }
-      );
+    if (!user || !valid) {
+      return jsonError("UNAUTHORIZED", "Invalid username or password", 401);
     }
 
     const token = await signToken(username);
@@ -66,9 +45,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("Login error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

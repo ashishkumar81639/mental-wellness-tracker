@@ -1,47 +1,31 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { requireAuth } from "@/lib/route-utils";
+import { requireAuth, jsonError, rateLimit } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { analyseJournal } from "@/lib/agents/journal-analyst";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { coerceExamType } from "@/lib/utils";
-
-const CheckInInput = z.object({
-  body: z.string().min(10).max(5000),
-  mood: z.number().int().min(1).max(5),
-  energy: z.number().int().min(1).max(5),
-  sleep_hrs: z.number().min(0).max(24).optional(),
-});
+import { CheckInInput } from "@/lib/schemas";
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(req, "check-in");
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests", code: "RATE_LIMITED" },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
-    );
-  }
+  const limited = rateLimit(req, "check-in");
+  if (limited) return limited;
 
   const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   const { username } = auth;
 
   try {
-    const body = await req.json();
-    const parsed = CheckInInput.safeParse(body);
-
+    const parsed = CheckInInput.safeParse(await req.json());
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid input", code: "VALIDATION_ERROR", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return jsonError("VALIDATION_ERROR", "Invalid input", 400, {
+        details: parsed.error.flatten(),
+      });
     }
 
     const { body: journalBody, mood, energy, sleep_hrs } = parsed.data;
 
     const users = await sql`SELECT exam_type FROM users WHERE id = ${username}`;
     if (users.length === 0) {
-      return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+      return jsonError("NOT_FOUND", "User not found", 404);
     }
     const examType = coerceExamType(users[0].exam_type);
 
@@ -126,9 +110,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("Check-in error:", err);
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL" },
-      { status: 500 }
-    );
+    return jsonError("INTERNAL", "Internal server error", 500);
   }
 }
