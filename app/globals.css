@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500&display=swap');
+
+@layer base {
+  body {
+    @apply bg-canvas text-body font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3 {
+    @apply font-display text-ink;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-on-primary font-medium text-sm rounded-md px-5 h-10
+           transition-colors duration-150
+           hover:bg-primary-active focus:outline-none focus:ring-2 focus:ring-primary/30;
+  }
+
+  .btn-secondary {
+    @apply bg-canvas text-ink font-medium text-sm rounded-md px-5 h-10
+           border border-hairline
+           transition-colors duration-150
+           hover:bg-surface-soft focus:outline-none focus:ring-2 focus:ring-hairline;
+  }
+
+  .card {
+    @apply bg-surface-card rounded-lg p-xl;
+  }
+
+  .card-dark {
+    @apply bg-surface-dark text-on-dark rounded-lg p-xl;
+  }
+
+  .input-field {
+    @apply bg-canvas text-ink font-sans text-base rounded-md px-4 h-10
+           border border-hairline
+           transition-colors duration-150
+           placeholder:text-muted-soft
+           focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15;
+  }
+
+  .text-link {
+    @apply text-primary font-medium hover:underline;
+  }
+
+  .badge-coral {
+    @apply bg-primary text-on-primary text-xs font-medium px-sm py-xxs rounded-pill;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .text-caption {
+    @apply text-[13px] font-medium;
+    line-height: 1.4;
+  }
+
+  .text-caption-uppercase {
+    @apply text-xs font-medium;
+    line-height: 1.4;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+}
+
+/* Custom scrollbar for the calm vibe */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e6dfd8;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d4ccc3;
+}

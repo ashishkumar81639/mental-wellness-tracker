@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Framework build output
+.next/
+.nuxt/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+.cursor
+.AGENTS.md
+.GEMINI.md
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# External design system (cloned, not committed)
+awesome-design-md/
+
+# Internal planning and review docs (not committed)
+plan.md
+review.md
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Playwright test artifacts
+.playwright-mcp/
