@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  LeafIcon,
+  PenIcon,
+  ChatHeartIcon,
+  SparklesIcon,
+  CalendarIcon,
+  TargetIcon,
+  HeartPulseIcon,
+  ArrowRightIcon,
+} from "@/components/icons";
 
 interface User {
   id: string;
@@ -167,7 +177,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-canvas">
       {/* Top nav */}
       <nav className="h-16 border-b border-hairline flex items-center justify-between px-lg bg-canvas">
-        <h2 className="text-title-md font-display text-ink">Yaar</h2>
+        <div className="flex items-center gap-xs">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/12 text-primary">
+            <LeafIcon width={18} height={18} />
+          </span>
+          <h2 className="text-title-md font-display text-ink">Yaar</h2>
+        </div>
         <div className="flex items-center gap-md">
           <span className="text-sm text-muted">
             {user.name} · {user.exam_type}
@@ -297,7 +312,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
           {/* Left: mood trend */}
           <section className="lg:col-span-2 card">
-            <h3 className="text-title-sm font-display text-ink mb-md">
+            <h3 className="flex items-center gap-xs text-title-sm font-display text-ink mb-md">
+              <CalendarIcon className="text-primary" width={18} height={18} />
               Your week
             </h3>
 
@@ -343,37 +359,52 @@ export default function DashboardPage() {
           <section className="space-y-md">
             <button
               onClick={() => setCheckInOpen(true)}
-              className="w-full card text-left hover:bg-surface-cream-strong transition-colors"
+              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             >
-              <span className="text-title-sm font-display text-ink block">
-                + New check-in
+              <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-on-primary">
+                <PenIcon />
               </span>
-              <span className="text-body-sm text-muted">
-                Journal, mood, get your analysis
+              <span className="min-w-0">
+                <span className="text-title-sm font-display text-ink block">
+                  New check-in
+                </span>
+                <span className="text-body-sm text-muted">
+                  Journal, mood, get your analysis
+                </span>
               </span>
             </button>
 
             <button
               onClick={() => router.push("/chat")}
-              className="w-full card text-left hover:bg-surface-cream-strong transition-colors"
+              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             >
-              <span className="text-title-sm font-display text-ink block">
-                Talk to Yaar
+              <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-teal/15 text-accent-teal">
+                <ChatHeartIcon />
               </span>
-              <span className="text-body-sm text-muted">
-                Chat with your companion
+              <span className="min-w-0">
+                <span className="text-title-sm font-display text-ink block">
+                  Talk to Yaar
+                </span>
+                <span className="text-body-sm text-muted">
+                  Chat with your companion
+                </span>
               </span>
             </button>
 
             <button
               onClick={() => router.push("/reframe")}
-              className="w-full card text-left hover:bg-surface-cream-strong transition-colors"
+              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             >
-              <span className="text-title-sm font-display text-ink block">
-                Reframe a thought
+              <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-amber/15 text-accent-amber">
+                <SparklesIcon />
               </span>
-              <span className="text-body-sm text-muted">
-                CBT-style perspective shift
+              <span className="min-w-0">
+                <span className="text-title-sm font-display text-ink block">
+                  Reframe a thought
+                </span>
+                <span className="text-body-sm text-muted">
+                  CBT-style perspective shift
+                </span>
               </span>
             </button>
           </section>
@@ -385,7 +416,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-xl">
               {/* Top triggers */}
               <div className="card">
-                <h3 className="text-title-sm font-display text-ink mb-md">
+                <h3 className="flex items-center gap-xs text-title-sm font-display text-ink mb-md">
+                  <TargetIcon className="text-primary" width={18} height={18} />
                   Top triggers
                 </h3>
                 <div className="space-y-sm">
@@ -412,7 +444,8 @@ export default function DashboardPage() {
 
               {/* Emotion distribution */}
               <div className="card">
-                <h3 className="text-title-sm font-display text-ink mb-md">
+                <h3 className="flex items-center gap-xs text-title-sm font-display text-ink mb-md">
+                  <HeartPulseIcon className="text-primary" width={18} height={18} />
                   Emotions
                 </h3>
                 <div className="flex flex-wrap gap-sm">
@@ -438,9 +471,10 @@ export default function DashboardPage() {
           <div className="mt-lg text-center">
             <button
               onClick={() => router.push("/trigger-map")}
-              className="text-link text-sm"
+              className="inline-flex items-center gap-xxs text-link text-sm"
             >
-              View trigger map &rarr;
+              View trigger map
+              <ArrowRightIcon width={16} height={16} />
             </button>
           </div>
         )}

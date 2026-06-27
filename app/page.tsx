@@ -2,6 +2,16 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { LeafIcon } from "@/components/icons";
+
+function BrandMark() {
+  return (
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/12 text-primary">
+      <LeafIcon />
+    </span>
+  );
+}
 
 export default function AuthPage() {
   const router = useRouter();
@@ -64,21 +74,70 @@ export default function AuthPage() {
     "other",
   ];
 
+  const isLogin = mode === "login";
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-lg">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-xl">
-          <h1 className="text-display-md font-display text-ink mb-sm">
-            Yaar
-          </h1>
-          <p className="text-body-md text-muted">
-            Your companion through the exam journey.
+    <main className="min-h-screen grid lg:grid-cols-2">
+      {/* Illustration panel */}
+      <section
+        className="relative hidden lg:block overflow-hidden bg-surface-dark"
+        aria-hidden="true"
+      >
+        <Image
+          src="/illustrations/study-night.png"
+          alt=""
+          fill
+          priority
+          sizes="50vw"
+          className={`object-cover transition-opacity duration-700 ease-out ${
+            isLogin ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <Image
+          src="/illustrations/friends-support.png"
+          alt=""
+          fill
+          sizes="50vw"
+          className={`object-cover transition-opacity duration-700 ease-out ${
+            isLogin ? "opacity-0" : "opacity-100"
+          }`}
+        />
+        {/* Warm scrim for legible overlay text */}
+        <div className="absolute inset-0 bg-gradient-to-t from-surface-dark via-surface-dark/40 to-transparent" />
+
+        <div className="absolute inset-x-0 bottom-0 p-xxl">
+          <p className="text-caption-uppercase text-accent-amber mb-sm">
+            Yaar · यार
+          </p>
+          <h2 className="font-display text-display-sm text-on-dark max-w-sm leading-snug">
+            {isLogin
+              ? "Welcome back. Let's breathe through today, together."
+              : "You don't have to carry exam stress alone."}
+          </h2>
+          <p className="text-body-md text-on-dark-soft mt-sm max-w-sm">
+            {isLogin
+              ? "Your journal, your moods, your companion — right where you left them."
+              : "A calm space to track how you feel and find your footing again."}
           </p>
         </div>
+      </section>
 
-        {/* Card */}
-        <div className="card">
+      {/* Form panel */}
+      <section className="flex items-center justify-center p-lg sm:p-xl">
+        <div className="w-full max-w-md">
+          {/* Header */}
+          <div className="text-center mb-xl">
+            <div className="flex items-center justify-center gap-sm mb-sm">
+              <BrandMark />
+              <h1 className="text-display-md font-display text-ink">Yaar</h1>
+            </div>
+            <p className="text-body-md text-muted">
+              Your companion through the exam journey.
+            </p>
+          </div>
+
+          {/* Card */}
+          <div className="card">
           {/* Tabs */}
           <div className="flex mb-lg bg-surface-soft rounded-md p-xxs">
             <button
@@ -229,12 +288,13 @@ export default function AuthPage() {
           </form>
         </div>
 
-        {/* Demo hint */}
-        <p className="text-center text-caption text-muted-soft mt-lg">
-          Demo account: <span className="font-medium">demo_user</span> /{" "}
-          <span className="font-medium">demo123</span>
-        </p>
-      </div>
+          {/* Demo hint */}
+          <p className="text-center text-caption text-muted-soft mt-lg">
+            Demo account: <span className="font-medium">demo_user</span> /{" "}
+            <span className="font-medium">demo123</span>
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

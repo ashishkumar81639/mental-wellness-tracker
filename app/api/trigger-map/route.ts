@@ -17,7 +17,8 @@ export async function GET(req: Request) {
         t.sentiment,
         aa.emotion,
         aa.coping_json->>'strategy' AS strategy,
-        aa.coping_json->>'mindfulness' AS mindfulness
+        aa.coping_json->>'mindfulness' AS mindfulness,
+        je.created_at::text AS entry_date
       FROM triggers t
       JOIN ai_analysis aa ON t.analysis_id = aa.id
       JOIN journal_entries je ON aa.entry_id = je.id
@@ -26,22 +27,23 @@ export async function GET(req: Request) {
       LIMIT 50
     `;
 
-    const nodeMap = new Map<string, { id: string; label: string; type: "trigger" | "emotion" | "coping" }>();
+    const nodeMap = new Map<string, { id: string; label: string; type: "trigger" | "emotion" | "coping"; latestDate?: string }>();
     const edgeMap = new Map<string, number>();
 
     for (const row of rows) {
       const triggerId = `trigger:${row.trigger_label}`;
       const emotionId = `emotion:${row.emotion}`;
-      const copingLabel = row.strategy
-        ? row.strategy.slice(0, 40)
-        : row.mindfulness
-          ? row.mindfulness.slice(0, 40)
-          : "coping strategy";
+      const copingLabel = row.strategy || row.mindfulness || "coping strategy";
       const copingId = `coping:${copingLabel}`;
 
-      // Nodes
+      // Nodes (track latest date for trigger nodes so frontend can sort by recency)
       if (!nodeMap.has(triggerId)) {
-        nodeMap.set(triggerId, { id: triggerId, label: row.trigger_label, type: "trigger" });
+        nodeMap.set(triggerId, { id: triggerId, label: row.trigger_label, type: "trigger", latestDate: row.entry_date });
+      } else {
+        const existing = nodeMap.get(triggerId)!;
+        if (row.entry_date > (existing.latestDate ?? "")) {
+          existing.latestDate = row.entry_date;
+        }
       }
       if (!nodeMap.has(emotionId)) {
         nodeMap.set(emotionId, { id: emotionId, label: row.emotion, type: "emotion" });
