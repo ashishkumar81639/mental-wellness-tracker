@@ -118,12 +118,6 @@ export default function TriggerMapPage() {
     });
   }
 
-  function formatDate(dateStr: string | undefined): string {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  }
-
   function daysAgo(dateStr: string | undefined): string {
     if (!dateStr) return "";
     const ms = Date.now() - new Date(dateStr).getTime();
