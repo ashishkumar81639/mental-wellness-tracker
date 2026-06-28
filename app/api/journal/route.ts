@@ -45,24 +45,33 @@ export async function GET(req: NextRequest) {
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const entries = rows.map((row) => ({
-      entry_id: row.entry_id,
-      body: row.body,
-      created_at: row.created_at,
-      mood: row.mood,
-      energy: row.energy,
-      sleep_hrs: row.sleep_hrs,
-      analysis: row.emotion
-        ? {
-            emotion: row.emotion,
-            intensity: row.intensity,
-            summary: row.summary,
-            reframe: row.reframe,
-            coping: row.coping_json,
-            safety_flag: row.safety_flag,
-          }
-        : null,
-    }));
+    const entries = rows.map((row) => {
+      const copingRaw = row.coping_json as { strategy?: string; mindfulness?: string; nudge?: string } | null;
+      const coping = copingRaw
+        ? Object.fromEntries(
+            Object.entries(copingRaw).filter(([k, v]) => k === "nudge" || (typeof v === "string" && v.length > 0))
+          )
+        : null;
+
+      return {
+        entry_id: row.entry_id,
+        body: row.body,
+        created_at: row.created_at,
+        mood: row.mood,
+        energy: row.energy,
+        sleep_hrs: row.sleep_hrs,
+        analysis: row.emotion
+          ? {
+              emotion: row.emotion,
+              intensity: row.intensity,
+              summary: row.summary,
+              reframe: row.reframe,
+              coping,
+              safety_flag: row.safety_flag,
+            }
+          : null,
+      };
+    });
 
     return cachedJson({ entries });
   } catch (err) {
