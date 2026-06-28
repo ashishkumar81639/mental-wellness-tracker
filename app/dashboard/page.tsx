@@ -311,10 +311,25 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
           {/* Left: mood trend */}
-          <section className="lg:col-span-2 card">
+          <section
+            className="lg:col-span-2 card cursor-pointer hover:bg-surface-cream-strong/30 transition-colors focus-within:ring-2 focus-within:ring-primary/30 relative group"
+            onClick={() => router.push("/journal")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                router.push("/journal");
+              }
+            }}
+            aria-label="View journal history"
+          >
             <h3 className="flex items-center gap-xs text-title-sm font-display text-ink mb-md">
               <CalendarIcon className="text-primary" width={18} height={18} />
               Your week
+              <span className="ml-auto text-xs text-link opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center gap-xxs">
+                View journal <ArrowRightIcon width={12} height={12} />
+              </span>
             </h3>
 
             {dashboard && dashboard.moodTrend.length > 0 ? (
