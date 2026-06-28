@@ -48,6 +48,13 @@ const EMOTION_COLORS: Record<string, string> = {
   motivated: "bg-success/10 text-success",
   lonely: "bg-muted/10 text-muted",
   grateful: "bg-primary/10 text-primary",
+  happy: "bg-success/15 text-success",
+  excited: "bg-accent-teal/15 text-accent-teal",
+  proud: "bg-primary/10 text-primary",
+  content: "bg-accent-teal/10 text-accent-teal",
+  confident: "bg-primary/10 text-primary",
+  nervous: "bg-warning/10 text-warning",
+  tired: "bg-muted/10 text-muted-soft",
 };
 
 function groupByDate(entries: JournalEntry[]): Map<string, JournalEntry[]> {

@@ -158,6 +158,13 @@ export const journalAnalystTools: Array<{
               "motivated",
               "lonely",
               "grateful",
+              "happy",
+              "excited",
+              "proud",
+              "content",
+              "confident",
+              "nervous",
+              "tired",
             ],
           },
           intensity: {
