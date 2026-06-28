@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, jsonError, rateLimit } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { analyseJournal } from "@/lib/agents/journal-analyst";
 import { coerceExamType } from "@/lib/utils";
 import { CheckInInput } from "@/lib/schemas";
+import { z } from "zod";
 
 export async function POST(req: Request) {
   const limited = rateLimit(req, "check-in");
@@ -110,6 +111,45 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("Check-in error:", err);
+    return jsonError("INTERNAL", "Internal server error", 500);
+  }
+}
+
+/**
+ * DELETE /api/check-in?entry_id=N
+ * Deletes a journal entry and all cascaded rows (mood_logs, ai_analysis, triggers).
+ * Used by the smoke test script to clean up after itself.
+ */
+export async function DELETE(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
+  const { username } = auth;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const raw = searchParams.get("entry_id");
+    const parsed = z.coerce.number().int().positive().safeParse(raw);
+    if (!parsed.success) {
+      return jsonError("VALIDATION_ERROR", "entry_id must be a positive integer", 400);
+    }
+
+    const entryId = parsed.data;
+
+    // Only allow deleting own entries
+    const rows = await sql`
+      SELECT id FROM journal_entries
+      WHERE id = ${entryId} AND user_id = ${username}
+    `;
+    if (rows.length === 0) {
+      return jsonError("NOT_FOUND", "Entry not found", 404);
+    }
+
+    // CASCADE handles mood_logs, ai_analysis, triggers
+    await sql`DELETE FROM journal_entries WHERE id = ${entryId}`;
+
+    return NextResponse.json({ deleted: true, entry_id: entryId });
+  } catch (err) {
+    console.error("Check-in delete error:", err);
     return jsonError("INTERNAL", "Internal server error", 500);
   }
 }

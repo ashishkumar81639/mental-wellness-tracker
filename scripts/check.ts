@@ -108,6 +108,18 @@ async function main() {
   }
 
   console.log(`PASS: entry_id=${result.entry_id}`);
+
+  // 4. Clean up: delete the test entry so it does not clutter the user's journal.
+  const deleteRes = await fetch(
+    `${BASE_URL}/api/check-in?entry_id=${result.entry_id}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (deleteRes.ok) {
+    console.log("  (test entry cleaned up)");
+  } else {
+    console.log(`  (cleanup returned ${deleteRes.status} — entry_id=${result.entry_id} left in DB)`);
+  }
+
   process.exit(0);
 }
 
