@@ -336,22 +336,30 @@ export default function JournalPage() {
                           )}
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-sm">
-                            <div>
-                              <h5 className="text-caption-uppercase text-muted-soft mb-xxs">
-                                Strategy
-                              </h5>
-                              <p className="text-body-sm text-body-strong">
-                                {entry.analysis.coping.strategy}
-                              </p>
-                            </div>
-                            <div>
-                              <h5 className="text-caption-uppercase text-muted-soft mb-xxs">
-                                Mindfulness
-                              </h5>
-                              <p className="text-body-sm text-body-strong">
-                                {entry.analysis.coping.mindfulness}
-                              </p>
-                            </div>
+                            {(entry.analysis.coping.strategy || entry.analysis.coping.mindfulness) && (
+                              <>
+                                {entry.analysis.coping.strategy && (
+                                  <div>
+                                    <h5 className="text-caption-uppercase text-muted-soft mb-xxs">
+                                      Strategy
+                                    </h5>
+                                    <p className="text-body-sm text-body-strong">
+                                      {entry.analysis.coping.strategy}
+                                    </p>
+                                  </div>
+                                )}
+                                {entry.analysis.coping.mindfulness && (
+                                  <div>
+                                    <h5 className="text-caption-uppercase text-muted-soft mb-xxs">
+                                      Mindfulness
+                                    </h5>
+                                    <p className="text-body-sm text-body-strong">
+                                      {entry.analysis.coping.mindfulness}
+                                    </p>
+                                  </div>
+                                )}
+                              </>
+                            )}
                             <div>
                               <h5 className="text-caption-uppercase text-muted-soft mb-xxs">
                                 Nudge

@@ -287,22 +287,26 @@ export default function DashboardPage() {
 
             {checkInResult.coping && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-md mt-lg">
-                <div>
-                  <h4 className="text-caption-uppercase text-muted-soft mb-xxs">
-                    Strategy
-                  </h4>
-                  <p className="text-body-sm text-body-strong">
-                    {checkInResult.coping.strategy}
-                  </p>
-                </div>
-                <div>
-                  <h4 className="text-caption-uppercase text-muted-soft mb-xxs">
-                    Mindfulness
-                  </h4>
-                  <p className="text-body-sm text-body-strong">
-                    {checkInResult.coping.mindfulness}
-                  </p>
-                </div>
+                {checkInResult.coping.strategy && (
+                  <div>
+                    <h4 className="text-caption-uppercase text-muted-soft mb-xxs">
+                      Strategy
+                    </h4>
+                    <p className="text-body-sm text-body-strong">
+                      {checkInResult.coping.strategy}
+                    </p>
+                  </div>
+                )}
+                {checkInResult.coping.mindfulness && (
+                  <div>
+                    <h4 className="text-caption-uppercase text-muted-soft mb-xxs">
+                      Mindfulness
+                    </h4>
+                    <p className="text-body-sm text-body-strong">
+                      {checkInResult.coping.mindfulness}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <h4 className="text-caption-uppercase text-muted-soft mb-xxs">
                     Nudge

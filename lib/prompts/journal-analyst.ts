@@ -76,8 +76,8 @@ ANALYSIS GUIDELINES:
 - Intensity: 1 (mild/barely there) to 5 (overwhelming/crisis level).
 - Summary: one sentence capturing the emotional core of this entry.
 - Reframe: a warm CBT-style cognitive shift, 2-3 sentences. Age-appropriate. Challenge the thought gently with evidence from their own entry. No clinical terms.
-- Strategy: ONE concrete, actionable coping tip they can do today. Scale it to their life stage.
-- Mindfulness: ONE adaptive breathing or mindfulness exercise, with clear simple steps. Under 50 words.
+- Strategy: ONE concrete, actionable coping tip they can do today. Scale it to their life stage. Only needed for negative/difficult emotions (anxiety, self-doubt, burnout, frustrated, overwhelmed, lonely, nervous, tired). Omit for positive emotions (happy, hopeful, excited, proud, content, confident, calm, grateful, motivated).
+- Mindfulness: ONE adaptive breathing or mindfulness exercise, with clear simple steps. Under 50 words. Same rule as Strategy: omit for positive emotions.
 - Nudge: ONE warm motivational line, under 20 words. Like a trusted senior friend, not a coach.
 - Safety flag: set to true ONLY if the journal mentions self-harm, suicide, severe hopelessness, or explicit crisis language. If flagged, the strategy MUST include India's Tele-MANAS helpline (14416) and Vandrevala Foundation (1860-2662-345).
 
@@ -184,12 +184,12 @@ export const journalAnalystTools: Array<{
           strategy: {
             type: "string",
             description:
-              "ONE concrete, actionable coping tip for today. Scale to life stage.",
+              "ONE concrete, actionable coping tip for today. Scale to life stage. Omit for positive emotions.",
           },
           mindfulness: {
             type: "string",
             description:
-              "ONE adaptive breathing/mindfulness exercise with clear steps, under 50 words",
+              "ONE adaptive breathing/mindfulness exercise with clear steps, under 50 words. Omit for positive emotions.",
           },
           nudge: {
             type: "string",
@@ -207,8 +207,6 @@ export const journalAnalystTools: Array<{
           "intensity",
           "summary",
           "reframe",
-          "strategy",
-          "mindfulness",
           "nudge",
           "safety_flag",
         ],
