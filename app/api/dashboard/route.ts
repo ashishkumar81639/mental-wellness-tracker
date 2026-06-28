@@ -11,17 +11,18 @@ export async function GET(req: NextRequest) {
   try {
     // The four widgets are independent reads - fire them in parallel.
     const [moodRows, triggerRows, emotionRows, streakRows] = await Promise.all([
-      // Mood trend: last 14 days
+      // Mood trend: last 14 days, in IST so dates match the user's calendar.
+      // Cast through text to avoid node-postgres timezone-shifting DATE columns.
       sql`
         SELECT
-          ml.created_at::date AS date,
+          (ml.created_at AT TIME ZONE 'Asia/Kolkata')::date::text AS date,
           ROUND(AVG(ml.mood)::numeric, 1) AS mood,
           ROUND(AVG(ml.energy)::numeric, 1) AS energy
         FROM mood_logs ml
         JOIN journal_entries je ON ml.entry_id = je.id
         WHERE je.user_id = ${username}
           AND ml.created_at >= now() - INTERVAL '14 days'
-        GROUP BY ml.created_at::date
+        GROUP BY (ml.created_at AT TIME ZONE 'Asia/Kolkata')::date
         ORDER BY date
       `,
       // Top triggers
@@ -50,9 +51,9 @@ export async function GET(req: NextRequest) {
         GROUP BY aa.emotion
         ORDER BY count DESC
       `,
-      // Streak: consecutive days with a journal entry
+      // Streak: consecutive days with a journal entry, in IST.
       sql`
-        SELECT je.created_at::date AS entry_date
+        SELECT (je.created_at AT TIME ZONE 'Asia/Kolkata')::date::text AS entry_date
         FROM journal_entries je
         WHERE je.user_id = ${username}
         ORDER BY entry_date DESC
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const moodTrend = moodRows.map((r) => ({
-      date: r.date.toISOString().split("T")[0],
+      date: r.date as string,
       mood: Number(r.mood),
       energy: Number(r.energy),
     }));
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
     }));
 
     const streak = calculateStreak(
-      streakRows.map((r) => ({ entry_date: r.entry_date.toISOString().split("T")[0] }))
+      streakRows.map((r) => ({ entry_date: r.entry_date as string }))
     );
 
     return cachedJson({ moodTrend, topTriggers, emotionDistribution, streak });
