@@ -52,3 +52,8 @@ export const ChatHistoryQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+export const TTSInput = z.object({
+  text: z.string().min(1).max(1000),
+  language: z.enum(["en", "hi"]).default("en"),
+});
