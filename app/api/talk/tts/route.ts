@@ -31,7 +31,11 @@ export async function POST(req: Request) {
     );
 
     const tts = getTTS(config);
-    const response = await tts.synthesize({ ...parsed.data, text: speechText });
+    const response = await tts.synthesize({
+      ...parsed.data,
+      text: speechText,
+      tone: parsed.data.tone,
+    });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");

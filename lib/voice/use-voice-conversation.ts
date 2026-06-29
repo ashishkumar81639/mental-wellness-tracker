@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createSentenceChunker } from "@/lib/voice/speech-text";
+import { TtsStreamPlayer } from "@/lib/voice/tts-stream-player";
+import type { VoiceTone } from "@/lib/config/types";
 
 /**
  * Drives a hands-free, continuous voice conversation:
@@ -65,8 +68,8 @@ interface UseVoiceConversation {
 }
 
 const WS_OPEN_TIMEOUT_MS = 10_000;
-const SPEAK_FALLBACK_PADDING_MS = 1_000;
-const MAX_REPLY_CHARS = 1_000;
+// Safety cap so a runaway reply can't queue an unbounded number of TTS calls.
+const MAX_SPEAK_CHARS = 1_500;
 
 function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
   const out = new Int16Array(float32.length);
@@ -98,6 +101,7 @@ export function useVoiceConversation({
   const wsRef = useRef<WebSocket | null>(null);
   const ttsCtxRef = useRef<AudioContext | null>(null);
   const ttsPrimedRef = useRef(false);
+  const playerRef = useRef<TtsStreamPlayer | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const setPhase = useCallback((next: VoicePhase) => {
@@ -156,6 +160,10 @@ export function useVoiceConversation({
     abortRef.current?.abort();
     abortRef.current = null;
 
+    if (playerRef.current) {
+      playerRef.current.cancel();
+      playerRef.current = null;
+    }
     if (processorRef.current) {
       processorRef.current.onaudioprocess = null;
       processorRef.current.disconnect();
@@ -179,13 +187,16 @@ export function useVoiceConversation({
     transcriptRef.current = "";
   }, []);
 
-  // --- Chat: stream a reply, return the full text (null if aborted/failed) --
+  // --- Chat: stream a reply, calling onDelta per token. Returns the full text
+  //     (null if aborted/failed). The signal is owned by the caller (runTurn). --
   const streamReply = useCallback(
-    async (message: string): Promise<string | null> => {
-      const controller = new AbortController();
-      abortRef.current = controller;
+    async (
+      message: string,
+      signal: AbortSignal,
+      onDelta: (delta: string) => void,
+      onTone: (tone: VoiceTone) => void
+    ): Promise<string | null> => {
       setStreamedText("");
-
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -194,7 +205,7 @@ export function useVoiceConversation({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ message }),
-          signal: controller.signal,
+          signal,
         });
         if (!res.ok || !res.body) throw new Error(`chat ${res.status}`);
 
@@ -218,10 +229,15 @@ export function useVoiceConversation({
               return fullText;
             }
             try {
-              const parsed = JSON.parse(payload) as { token?: string };
+              const parsed = JSON.parse(payload) as {
+                token?: string;
+                tone?: VoiceTone;
+              };
+              if (parsed.tone) onTone(parsed.tone);
               if (parsed.token) {
                 fullText += parsed.token;
                 setStreamedText(fullText);
+                onDelta(parsed.token);
               }
             } catch {
               /* skip non-JSON keepalives */
@@ -232,92 +248,126 @@ export function useVoiceConversation({
         return fullText;
       } catch {
         setStreamedText("");
-        if (controller.signal.aborted) return null;
+        if (signal.aborted) return null;
         setError("Couldn't reach Yaar. Tap the mic to try again.");
         return null;
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
       }
     },
     [token]
   );
 
-  // --- TTS: resolves only once playback finishes (so the mic stays gated) ---
-  const speak = useCallback(
-    async (text: string): Promise<void> => {
+  // --- TTS: synthesize one chunk to encoded audio bytes (null = skip) -------
+  const synthesizeChunk = useCallback(
+    async (
+      text: string,
+      signal: AbortSignal,
+      tone?: VoiceTone
+    ): Promise<ArrayBuffer | null> => {
       const clean = text.trim();
-      if (!clean) return;
-      // Re-unlock here, not just in start(): the context can be suspended again
-      // by the time a reply is ready (tab switch, navigation, OS audio change).
-      // This is the fix for "text appeared but no audio on the first turn back".
-      const ctx = await ensureTtsContext();
-      if (!ctx) return;
-
-      let res: Response;
+      if (!clean) return null;
       try {
-        res = await fetch("/api/talk/tts", {
+        const res = await fetch("/api/talk/tts", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            text: clean.slice(0, MAX_REPLY_CHARS),
+            text: clean,
             language: /[ऀ-ॿ]/.test(clean) ? "hi" : "en",
+            tone,
           }),
+          signal,
         });
+        if (!res.ok) return null;
+        return await res.arrayBuffer();
       } catch {
-        return; // network error: skip playback, fall through to listening
-      }
-      if (!res.ok) return;
-
-      try {
-        const buf = await ctx.decodeAudioData(await res.arrayBuffer());
-        await new Promise<void>((resolve) => {
-          const source = ctx.createBufferSource();
-          source.buffer = buf;
-          source.connect(ctx.destination);
-          // onended is the source of truth; the timer is a safety net so a
-          // dropped event can never strand us in the "speaking" phase.
-          const fallback = setTimeout(
-            resolve,
-            buf.duration * 1000 + SPEAK_FALLBACK_PADDING_MS
-          );
-          source.onended = () => {
-            clearTimeout(fallback);
-            resolve();
-          };
-          source.start(0);
-        });
-      } catch {
-        /* decode failure: skip playback */
+        return null; // aborted or network error: skip this chunk
       }
     },
-    [token, ensureTtsContext]
+    [token]
   );
 
-  // --- One full turn: user finished speaking → reply → speak → listen again -
+  // --- One full turn: reply streams → sentences synthesize + play as they
+  //     arrive → listen again. Generation, synthesis and playback overlap, so
+  //     the first words are heard within ~1-2s instead of after the full reply.
   const runTurn = useCallback(
     async (utterance: string) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setPhase("thinking");
       setPartialTranscript("");
       transcriptRef.current = "";
       onUserMessage(utterance);
 
-      const reply = await streamReply(utterance);
-      if (isStopped()) return; // user stopped mid-flight
+      // Unlock playback inside the turn (context can suspend on tab/nav change).
+      const ctx = await ensureTtsContext();
+      // Tone arrives as the first SSE event, before any sentence is synthesized;
+      // the closure reads the latest value at call time.
+      let tone: VoiceTone | undefined;
+      const player = ctx
+        ? new TtsStreamPlayer({
+            context: ctx,
+            synthesize: (t) => synthesizeChunk(t, controller.signal, tone),
+          })
+        : null;
+      playerRef.current = player;
+
+      // Break the first chunk early (~first clause) so audio starts as soon as
+      // the LLM produces a few words, not after a whole opening sentence.
+      const chunker = createSentenceChunker({ firstChunkChars: 18 });
+      let spokenChars = 0;
+      const speakSentence = (sentence: string) => {
+        if (!player || isStopped() || spokenChars >= MAX_SPEAK_CHARS) return;
+        spokenChars += sentence.length;
+        if (phaseRef.current === "thinking") setPhase("speaking");
+        player.enqueue(sentence);
+      };
+
+      const reply = await streamReply(
+        utterance,
+        controller.signal,
+        (delta) => {
+          for (const sentence of chunker.push(delta)) speakSentence(sentence);
+        },
+        (t) => {
+          tone = t;
+        }
+      );
+
+      if (isStopped()) {
+        player?.cancel();
+        playerRef.current = null;
+        abortRef.current = null;
+        return;
+      }
       if (reply == null) {
+        player?.cancel();
+        playerRef.current = null;
+        abortRef.current = null;
         setPhase("listening"); // recoverable failure: keep the mic open
         return;
       }
-      onAssistantMessage(reply);
 
-      setPhase("speaking");
-      await speak(reply);
+      onAssistantMessage(reply);
+      speakSentence(chunker.flush()); // trailing partial sentence
+
+      if (player) await player.end(); // resolves when all audio has played
+      playerRef.current = null;
+      abortRef.current = null;
       if (isStopped()) return;
       setPhase("listening");
     },
-    [onUserMessage, onAssistantMessage, streamReply, speak, setPhase, isStopped]
+    [
+      onUserMessage,
+      onAssistantMessage,
+      streamReply,
+      synthesizeChunk,
+      ensureTtsContext,
+      setPhase,
+      isStopped,
+    ]
   );
 
   // --- Open the Assembly socket and wire the capture graph ------------------

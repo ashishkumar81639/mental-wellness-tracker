@@ -74,3 +74,77 @@ export function splitForSpeech(text: string, maxLen = 500): string[] {
 
   return chunks;
 }
+
+/**
+ * Incremental sentence splitter for streaming text. Feed it token deltas as
+ * they arrive from the LLM; `push` returns whichever complete sentences have
+ * become available, and `flush` returns the trailing partial sentence at the
+ * end. This is what lets us synthesize and speak sentence-by-sentence instead
+ * of waiting for the whole reply — the source of the latency win.
+ */
+export function createSentenceChunker(
+  opts: { firstChunkChars?: number } = {}
+): {
+  push: (delta: string) => string[];
+  flush: () => string;
+} {
+  // When > 0, the FIRST chunk is allowed to break early at a clause boundary
+  // (or word break) once it reaches this length — so the first words start
+  // synthesizing immediately instead of waiting for a whole opening sentence.
+  // This is the main lever on perceived time-to-first-audio.
+  const firstChunkChars = opts.firstChunkChars ?? 0;
+  let buffer = "";
+  let emittedFirst = false;
+
+  // A sentence ends at . ! ? or the Hindi danda (।) — optionally followed by a
+  // closing quote/bracket — and then whitespace; or at one or more line breaks.
+  // Requiring trailing whitespace avoids splitting decimals like "3.14".
+  const sentence = /(?:[.!?।]+["'”’)\]]?\s)|(?:\n+)/;
+  const clause = /[,;:—–]\s/g;
+
+  // Index just past the next chunk boundary in `buffer`, or -1 if none yet.
+  function nextCut(): number {
+    const sm = buffer.match(sentence);
+    let cut = sm && sm.index !== undefined ? sm.index + sm[0].length : -1;
+
+    if (!emittedFirst && firstChunkChars > 0 && buffer.length >= firstChunkChars) {
+      clause.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      let early = -1;
+      while ((m = clause.exec(buffer))) {
+        const end = m.index + m[0].length;
+        if (end >= firstChunkChars) { early = end; break; }
+      }
+      if (early < 0) {
+        const sp = buffer.indexOf(" ", firstChunkChars);
+        if (sp >= 0) early = sp + 1;
+      }
+      if (early > 0 && (cut < 0 || early < cut)) cut = early;
+    }
+    return cut;
+  }
+
+  return {
+    push(delta: string): string[] {
+      buffer += delta;
+      const out: string[] = [];
+      for (;;) {
+        const cut = nextCut();
+        if (cut < 0) break;
+        const piece = buffer.slice(0, cut).trim();
+        buffer = buffer.slice(cut);
+        if (piece) {
+          out.push(piece);
+          emittedFirst = true;
+        }
+      }
+      return out;
+    },
+    flush(): string {
+      const rest = buffer.trim();
+      buffer = "";
+      emittedFirst = true;
+      return rest;
+    },
+  };
+}

@@ -56,4 +56,7 @@ export const ChatHistoryQuery = z.object({
 export const TTSInput = z.object({
   text: z.string().min(1).max(1000),
   language: z.enum(["en", "hi"]).default("en"),
+  tone: z
+    .enum(["warm", "gentle", "calm", "encouraging", "cheerful", "serious", "sad"])
+    .optional(),
 });

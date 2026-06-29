@@ -89,8 +89,24 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     let fullReply = "";
 
+    // The companion starts each reply with a hidden tone tag like
+    // [[tone:gentle]]. We parse it off the front, emit it as its own SSE event
+    // (the voice client maps it to delivery), and keep it out of the displayed
+    // text and the stored message. Text chat never sees it.
+    const TAG_RE = /^\s*\[\[\s*tone\s*:\s*([a-zA-Z]+)\s*\]\]\s*/i;
+    let tagResolved = false;
+    let tagBuf = "";
+
     const stream = new ReadableStream({
       async start(controller) {
+        const emitToken = (t: string) => {
+          if (!t) return;
+          fullReply += t;
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ token: t })}\n\n`)
+          );
+        };
+
         try {
           for await (const token of streamCompanionReply(
             examType,
@@ -101,11 +117,34 @@ export async function POST(req: Request) {
             currentMood,
             currentEmotion
           )) {
-            fullReply += token;
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
-            );
+            if (tagResolved) {
+              emitToken(token);
+              continue;
+            }
+            tagBuf += token;
+            const match = tagBuf.match(TAG_RE);
+            if (match) {
+              tagResolved = true;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ tone: match[1].toLowerCase() })}\n\n`
+                )
+              );
+              emitToken(tagBuf.slice(match[0].length));
+              tagBuf = "";
+            } else {
+              // Stop buffering once the start can no longer be the tag, or we've
+              // waited long enough — then flush what we held as normal text.
+              const head = tagBuf.replace(/^\s+/, "").slice(0, 7);
+              const couldBeTag = "[[tone:".startsWith(head) || head === "[[tone:";
+              if (!couldBeTag || tagBuf.length > 40) {
+                tagResolved = true;
+                emitToken(tagBuf);
+                tagBuf = "";
+              }
+            }
           }
+          if (!tagResolved) emitToken(tagBuf); // short reply: flush leftover
 
           await sql`
             INSERT INTO chat_messages (user_id, role, content)
