@@ -197,10 +197,35 @@ export default function ChatPage() {
   }, [token]);
 
   const stopRecording = useCallback(async () => {
-    // Read from ref (always fresh), not state (can be stale in closure)
-    const transcript = transcriptRef.current.trim();
-    cleanupRecording();
+    // Send Terminate, then wait for final Turn to arrive from Assembly AI
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "Terminate" }));
+    }
     setIsRecording(false);
+    // Wait for the final Turn message to arrive over WebSocket before reading transcript
+    await new Promise((r) => setTimeout(r, 800));
+
+    // Stop mic + audio pipeline
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    const transcript = transcriptRef.current.trim();
+    transcriptRef.current = "";
 
     if (!transcript) {
       setPartialTranscript("");
@@ -217,14 +242,6 @@ export default function ChatPage() {
   }, []);
 
   function cleanupRecording() {
-    if (wsRef.current) {
-      // Send Terminate so Assembly AI flushes the final Turn and stops billing
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "Terminate" }));
-      }
-      wsRef.current.close();
-      wsRef.current = null;
-    }
     if (processorRef.current) {
       processorRef.current.disconnect();
       processorRef.current = null;
@@ -236,6 +253,13 @@ export default function ChatPage() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "Terminate" }));
+      }
+      wsRef.current.close();
+      wsRef.current = null;
     }
     transcriptRef.current = "";
   }
@@ -258,7 +282,9 @@ export default function ChatPage() {
         return; // browser blocked autoplay
       }
     }
-    if (ctx.state === "suspended") return; // can't play without gesture
+    if (ctx.state === "suspended") {
+      await ctx.resume(); // browser may have suspended after first message
+    }
 
     try {
       ttsPlayingRef.current = true;
