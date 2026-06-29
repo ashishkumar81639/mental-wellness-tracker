@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "Yaar - Your Study Companion",
   description:
     "An empathetic AI companion for students navigating exam stress, self-doubt, and the pressure of competitive exams.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
