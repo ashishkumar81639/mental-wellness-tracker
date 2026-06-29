@@ -161,3 +161,41 @@ ws.onmessage = (event) => {
 | 7 | Bug 7: No WS message logging | Can't debug protocol issues |
 
 **Fix bugs 1-4 to make it work. Bugs 5-7 are polish.**
+
+---
+
+## Post-fix findings (2026-06-29, 21:16)
+
+### Bug 8 (FIXED): Duplicate transcript rendering
+
+`stopRecording` called `setPartialTranscript(transcript)` to keep the voice bubble visible,
+then called `submitMessage()` which added the same text as a real user message to `messages[]`.
+Both rendered simultaneously for a brief moment, creating a duplicate appearance.
+
+**Fix:** Clear `setPartialTranscript("")` BEFORE calling `submitMessage()`. Only the real
+user message renders.
+
+### Bug 9 (FIXED): TTS fired mid-stream with incomplete text
+
+TTS was triggered after ~150 characters of streaming, sending partial/incomplete sentences.
+The sentence-splitting regex on 150 chars of streamed text produced poor quality.
+The Sarvam "anushka" voice reading partial chatter sounded robotic.
+
+**Fix:** Remove mid-stream TTS trigger. Wait for `[DONE]` signal, then send the complete
+response (up to 1000 chars) to TTS. Voice changed to "manisha" (warmer tone).
+
+### Bug 10 (FIXED): Assembly AI standalone TTS v2 deprecated
+
+Assembly AI removed the `/v2/tts` REST endpoint. TTS is now bundled exclusively in their
+Voice Agent API ($4.50/hr, WebSocket). Marked the `assemblyTTS` provider as deprecated
+with a clear error message. Defaulted `TTS_PROVIDER=sarvam` in `.env.example`.
+
+### TTS voice comparison
+
+| Voice | Provider | Quality for English |
+|-------|----------|---------------------|
+| anushka | Sarvam | Stiff, robotic |
+| manisha | Sarvam | Warmer, more natural |
+| Assembly Voice Agent | Assembly AI | Best but $4.50/hr, replaces entire pipeline |
+
+`sprint: Evaluate dedicated TTS providers (ElevenLabs, Cartesia) for better English quality.`
