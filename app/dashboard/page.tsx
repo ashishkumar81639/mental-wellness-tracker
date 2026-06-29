@@ -401,8 +401,8 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={undefined}
-              className="group w-full card flex items-center gap-md text-left opacity-60 cursor-not-allowed focus:outline-none"
+              onClick={() => router.push("/chat")}
+              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             >
               <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-teal/15 text-accent-teal">
                 <ChatHeartIcon />
@@ -410,6 +410,27 @@ export default function DashboardPage() {
               <span className="min-w-0">
                 <span className="text-title-sm font-display text-ink block">
                   Chat to Yaar
+                </span>
+                <span className="text-body-sm text-muted">
+                  Chat with your companion
+                </span>
+              </span>
+            </button>
+
+            <button
+              disabled
+              className="group w-full card flex items-center gap-md text-left opacity-50 cursor-not-allowed"
+            >
+              <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-teal/15 text-accent-teal">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                </svg>
+              </span>
+              <span className="min-w-0">
+                <span className="text-title-sm font-display text-ink block">
+                  Talk to Yaar
                 </span>
                 <span className="text-body-sm text-muted">
                   Coming soon
