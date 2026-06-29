@@ -135,7 +135,7 @@ export default function ChatPage() {
           {messages.length === 0 && !streaming && (
             <div className="text-center py-xxl">
               <h3 className="text-title-md font-display text-ink mb-sm">
-                Talk to Yaar
+                Chat to Yaar
               </h3>
               <p className="text-body text-muted">
                 Your empathetic companion who remembers your journey.

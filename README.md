@@ -46,7 +46,7 @@ npm run dev
 2. Sign in with `demo_user` / `demo123`
 3. Dashboard shows mood trend, triggers, and exam countdown
 4. Click "New check-in" → write how you're feeling → get AI analysis with coping strategies
-5. Click "Talk to Yaar" → chat with your streaming companion
+5. Click "Chat to Yaar" → chat with your streaming companion (coming soon on dashboard)
 6. Click "Reframe a thought" → paste a spiraling thought → get a CBT perspective shift
 7. Click "View trigger map" → see your trigger→emotion→coping connections
 

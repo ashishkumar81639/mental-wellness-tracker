@@ -401,18 +401,18 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push("/chat")}
-              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              onClick={undefined}
+              className="group w-full card flex items-center gap-md text-left opacity-60 cursor-not-allowed focus:outline-none"
             >
               <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-teal/15 text-accent-teal">
                 <ChatHeartIcon />
               </span>
               <span className="min-w-0">
                 <span className="text-title-sm font-display text-ink block">
-                  Talk to Yaar
+                  Chat to Yaar
                 </span>
                 <span className="text-body-sm text-muted">
-                  Chat with your companion
+                  Coming soon
                 </span>
               </span>
             </button>
