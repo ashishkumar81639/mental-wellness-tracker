@@ -42,7 +42,7 @@ export default function ChatPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsContextRef = useRef<AudioContext | null>(null);
   const transcriptRef = useRef("");
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -103,6 +103,14 @@ export default function ChatPage() {
     setVoiceError(null);
     setPartialTranscript("");
     transcriptRef.current = "";
+
+    // Create TTS AudioContext during user gesture (unlocks autoplay for TTS)
+    if (!ttsContextRef.current || ttsContextRef.current.state === "closed") {
+      ttsContextRef.current = new AudioContext();
+    }
+    if (ttsContextRef.current.state === "suspended") {
+      await ttsContextRef.current.resume();
+    }
 
     try {
       // 1. Request mic
@@ -238,6 +246,20 @@ export default function ChatPage() {
 
   async function speakResponse(text: string) {
     if (ttsPlayingRef.current) return;
+
+    // Lazy-init AudioContext if not created by mic click (text-only chat fallback)
+    let ctx = ttsContextRef.current;
+    if (!ctx || ctx.state === "closed") {
+      try {
+        ctx = new AudioContext();
+        ttsContextRef.current = ctx;
+        await ctx.resume();
+      } catch {
+        return; // browser blocked autoplay
+      }
+    }
+    if (ctx.state === "suspended") return; // can't play without gesture
+
     try {
       ttsPlayingRef.current = true;
       const hasHindi = /[ऀ-ॿ]/.test(text);
@@ -253,17 +275,17 @@ export default function ChatPage() {
 
       if (!res.ok) { ttsPlayingRef.current = false; return; }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-      if (ttsAudioRef.current) {
-        ttsAudioRef.current.src = url;
-        await ttsAudioRef.current.play();
-      }
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      source.onended = () => { ttsPlayingRef.current = false; };
     } catch {
-      // TTS is optional; text is always visible
+      ttsPlayingRef.current = false;
     }
-    ttsPlayingRef.current = false;
   }
 
   // --- Chat ---
@@ -335,6 +357,12 @@ export default function ChatPage() {
 
   function handleSend(e: FormEvent) {
     e.preventDefault();
+    // Unlock TTS AudioContext from text Send button click (user gesture)
+    if (!ttsContextRef.current || ttsContextRef.current.state !== "running") {
+      const ctx = new AudioContext();
+      ttsContextRef.current = ctx;
+      ctx.resume();
+    }
     submitMessage(input);
   }
 
@@ -506,9 +534,6 @@ export default function ChatPage() {
           </div>
         )}
       </div>
-
-      {/* Hidden TTS audio element */}
-      <audio ref={ttsAudioRef} className="hidden" />
     </div>
   );
 }
