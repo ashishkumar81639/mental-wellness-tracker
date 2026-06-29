@@ -418,8 +418,8 @@ export default function DashboardPage() {
             </button>
 
             <button
-              disabled
-              className="group w-full card flex items-center gap-md text-left opacity-50 cursor-not-allowed"
+              onClick={() => router.push("/talk")}
+              className="group w-full card flex items-center gap-md text-left hover:bg-surface-cream-strong focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             >
               <span className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-teal/15 text-accent-teal">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -433,7 +433,7 @@ export default function DashboardPage() {
                   Talk to Yaar
                 </span>
                 <span className="text-body-sm text-muted">
-                  Coming soon
+                  Voice conversation, hands-free
                 </span>
               </span>
             </button>

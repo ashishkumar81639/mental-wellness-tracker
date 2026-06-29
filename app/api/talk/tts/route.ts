@@ -3,6 +3,7 @@ import { requireAuth, jsonError } from "@/lib/route-utils";
 import { providerConfig, getTTS } from "@/lib/config/registry";
 import { ensureRegistered } from "@/lib/config/register";
 import { TTSInput } from "@/lib/schemas";
+import { sanitizeForSpeech } from "@/lib/voice/speech-text";
 
 ensureRegistered();
 
@@ -19,13 +20,18 @@ export async function POST(req: Request) {
       });
     }
 
+    const speechText = sanitizeForSpeech(parsed.data.text);
+    if (!speechText) {
+      return jsonError("VALIDATION_ERROR", "Nothing to speak after sanitizing", 422);
+    }
+
     const config = providerConfig();
     console.log(
-      `[tts] provider=${config.tts} chars=${parsed.data.text.length} lang=${parsed.data.language}`
+      `[tts] provider=${config.tts} chars=${speechText.length} lang=${parsed.data.language}`
     );
 
     const tts = getTTS(config);
-    const response = await tts.synthesize(parsed.data);
+    const response = await tts.synthesize({ ...parsed.data, text: speechText });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
