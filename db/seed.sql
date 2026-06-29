@@ -64,6 +64,30 @@ INSERT INTO triggers (analysis_id, label, category, sentiment)
 SELECT a.id, t.label, t.category, t.sentiment FROM a,
   (VALUES ('organic chemistry','academic',-1), ('family expectations','family',-2), ('small win: physics','academic',2)) AS t(label,category,sentiment);
 
+-- Day 2.5 (2 days ago - Saturday): took a break, felt guilty about it.
+WITH e AS (
+  INSERT INTO journal_entries (user_id, body, created_at)
+  VALUES ('demo_user',
+    'Took the day off from studying. Watched a movie with my sister. It felt nice in the moment but now I feel like I wasted a whole day. Everyone else was probably studying.',
+    now() - INTERVAL '2 days')
+  RETURNING id
+), m AS (
+  INSERT INTO mood_logs (user_id, entry_id, mood, energy, sleep_hrs, created_at)
+  SELECT 'demo_user', e.id, 3, 3, 8.0, now() - INTERVAL '2 days' FROM e
+), a AS (
+  INSERT INTO ai_analysis (entry_id, emotion, intensity, summary, reframe, coping_json, safety_flag, created_at)
+  SELECT e.id, 'guilt', 3,
+    'Rest guilt after taking a needed break, amplified by comparison habits.',
+    'Rest is part of prep, not a distraction from it. Your brain consolidates learning during downtime. One day off a week is how you avoid burnout.',
+    '{"strategy":"Schedule one guilt-free rest day every week so it feels intentional, not accidental.","mindfulness":"Notice the guilt without judging it. Let it pass like a cloud.","nudge":"Rest is not wasted time. It is invested time that pays back in focus."}'::jsonb,
+    false,
+    now() - INTERVAL '2 days'
+  FROM e RETURNING id
+)
+INSERT INTO triggers (analysis_id, label, category, sentiment)
+SELECT a.id, t.label, t.category, t.sentiment FROM a,
+  (VALUES ('taking a break','self',1), ('peer comparison','social',-2), ('guilt','emotional',-2)) AS t(label,category,sentiment);
+
 -- Day 3 (today): calmer, building a routine.
 WITH e AS (
   INSERT INTO journal_entries (user_id, body, created_at)
