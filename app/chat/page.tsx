@@ -201,9 +201,9 @@ export default function ChatPage() {
 
     setInput(transcript);
     setSubmittingVoice(true);
-    setPartialTranscript(transcript);
-    await submitMessage(transcript);
+    // Clear the transcript bubble so only the real user message renders
     setPartialTranscript("");
+    await submitMessage(transcript);
     setInput("");
     setSubmittingVoice(false);
   }, []);
@@ -240,18 +240,13 @@ export default function ChatPage() {
     if (ttsPlayingRef.current) return;
     try {
       ttsPlayingRef.current = true;
-      // Send only the 2 most recent sentences, not the full stream buffer
-      const sentences = text.split(/(?<=[.!?])\s+/);
-      const ttsText = sentences.length > 1
-        ? (sentences[sentences.length - 2] + " " + sentences[sentences.length - 1]).trim()
-        : text;
       const hasHindi = /[ऀ-ॿ]/.test(text);
 
       const res = await fetch("/api/talk/tts", {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          text: ttsText.slice(0, 500),
+          text: text.slice(0, 1000),
           language: hasHindi ? "hi" : "en",
         }),
       });
@@ -319,10 +314,7 @@ export default function ChatPage() {
             setStreamedText("");
             setStreaming(false);
 
-            // Play TTS if it didn't fire mid-stream (short response)
-            if (!ttsPlayingRef.current) {
-              speakResponse(fullText);
-            }
+            speakResponse(fullText);
             return;
           }
           try {
@@ -330,10 +322,6 @@ export default function ChatPage() {
             if (parsed.token) {
               fullText += parsed.token;
               setStreamedText(fullText);
-              // Kick off TTS after first ~150 chars so audio plays while rest streams
-              if (fullText.length > 150 && !ttsPlayingRef.current) {
-                speakResponse(fullText);
-              }
             }
           } catch {
             // skip

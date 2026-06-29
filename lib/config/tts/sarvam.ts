@@ -23,7 +23,7 @@ export const sarvamTTS: TTSProvider = {
       body: JSON.stringify({
         inputs: [text],
         target_language_code: language === "hi" ? "hi-IN" : "en-IN",
-        speaker: "anushka",
+        speaker: "manisha",
         pace: 1.0,
         loudness: 1.0,
       }),
