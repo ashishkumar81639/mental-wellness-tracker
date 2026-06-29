@@ -17,7 +17,14 @@ export const RegisterInput = z.object({
   name: z.string().min(1).max(100),
   password: z.string().min(6).max(128),
   exam_type: z.enum(["NEET", "JEE", "CUET", "CAT", "GATE", "UPSC", "boards", "other"]),
-  exam_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format").optional(),
+  exam_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
+    .refine(
+      (d) => new Date(d) > new Date(),
+      "Exam date must be in the future"
+    )
+    .optional(),
 });
 
 export const CheckInInput = z.object({
