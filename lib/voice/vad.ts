@@ -15,9 +15,9 @@ export interface VadConfig {
   speechStartRms?: number;
   /** RMS threshold to leave `speaking` state (hysteresis). Default 0.010. */
   speechEndRms?: number;
-  /** How long to keep forwarding after speech drops below threshold. Default 700ms. */
+  /** How long to keep forwarding after speech drops below threshold. Default 1200ms. */
   trailHoldMs?: number;
-  /** Auto-pause if nobody speaks for this long. Default 8000ms. */
+  /** Auto-pause if nobody speaks for this long. Default 12000ms. */
   silenceTimeoutMs?: number;
   /** Number of PCM frames to buffer so the first word isn't clipped. Default 3. */
   preRollFrames?: number;
@@ -48,8 +48,8 @@ type VadState = "silence" | "speaking" | "trail";
 const DEFAULTS: Required<VadConfig> = {
   speechStartRms: 0.015,
   speechEndRms: 0.010,
-  trailHoldMs: 700,
-  silenceTimeoutMs: 8000,
+  trailHoldMs: 1200,       // keep forwarding audio through natural pauses
+  silenceTimeoutMs: 12000,  // auto-end session if silent for 12s
   preRollFrames: 3,
 };
 

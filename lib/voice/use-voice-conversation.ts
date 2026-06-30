@@ -421,16 +421,13 @@ export function useVoiceConversation({
 
           // VAD gate: only forward audio to Assembly when the user is speaking.
           // Silence is never sent, cutting billing by 70-90%.
+          // Assembly's own end_of_turn is the authoritative signal for when
+          // the user finished speaking - VAD must NOT trigger turns.
           const gate = createVadGate(
             cfg.sampleRate,
             4096,
             {
-              onSpeechEnd: () => {
-                const transcript = transcriptRef.current.trim();
-                if (transcript && phaseRef.current === "listening") {
-                  void runTurn(transcript);
-                }
-              },
+              onSpeechEnd: () => { /* VAD trail hold expired, but Assembly decides turn boundaries */ },
               onSilenceTimeout: () => {
                 if (phaseRef.current === "idle" || phaseRef.current === "error") return;
                 setPhase("idle");

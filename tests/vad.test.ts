@@ -89,7 +89,7 @@ describe("createVadGate", () => {
     gate.process(makeSpeech(4096)); // silence -> speaking
     gate.process(makeQuiet(4096));  // speaking -> trail
 
-    vi.advanceTimersByTime(300); // within 700ms hold
+    vi.advanceTimersByTime(800); // within 1200ms hold
 
     // Loud frame before hold expires -> back to speaking
     const pcms = gate.process(makeSpeech(4096));
@@ -102,7 +102,7 @@ describe("createVadGate", () => {
     gate.process(makeSpeech(4096)); // silence -> speaking
     gate.process(makeQuiet(4096));  // speaking -> trail
 
-    vi.advanceTimersByTime(701); // past 700ms hold
+    vi.advanceTimersByTime(1201); // past 1200ms hold
 
     const pcms = gate.process(makeQuiet(4096));
     expect(pcms).not.toBeNull();
@@ -114,7 +114,7 @@ describe("createVadGate", () => {
     gate.process(makeSpeech(4096)); // silence -> speaking
     gate.process(makeQuiet(4096));  // speaking -> trail
 
-    vi.advanceTimersByTime(701);
+    vi.advanceTimersByTime(1201);
     gate.process(makeQuiet(4096));  // trail -> silence, fires onSpeechEnd
     expect(onSpeechEnd).toHaveBeenCalledOnce();
 
@@ -146,7 +146,7 @@ describe("createVadGate", () => {
     expect(gate.process(makeSilence(4096))).toBeNull(); // sets silenceStart
     expect(onSilenceTimeout).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(8001); // total ~8002 > 8000 threshold
+    vi.advanceTimersByTime(12001); // total ~12002 > 12000 threshold
     expect(gate.process(makeSilence(4096))).toBeNull();
     expect(onSilenceTimeout).toHaveBeenCalledOnce();
   });
@@ -154,30 +154,30 @@ describe("createVadGate", () => {
   it("onSilenceTimeout does not fire after destroy", () => {
     vi.advanceTimersByTime(1);
     gate.process(makeSilence(4096));
-    vi.advanceTimersByTime(8001);
+    vi.advanceTimersByTime(12001);
     gate.process(makeSilence(4096));
     expect(onSilenceTimeout).toHaveBeenCalledOnce();
 
     gate.destroy();
-    vi.advanceTimersByTime(8001);
+    vi.advanceTimersByTime(12001);
     gate.process(makeSilence(4096));
     expect(onSilenceTimeout).toHaveBeenCalledOnce(); // still 1
   });
 
   it("speech resets silence timer", () => {
-    vi.advanceTimersByTime(4000);
+    vi.advanceTimersByTime(6000);
     gate.process(makeSilence(4096));
     expect(onSilenceTimeout).not.toHaveBeenCalled();
 
     // User speaks briefly
     gate.process(makeSpeech(4096));
     gate.process(makeQuiet(4096));
-    vi.advanceTimersByTime(701);
+    vi.advanceTimersByTime(1201);
     gate.process(makeQuiet(4096)); // fires onSpeechEnd, back to silence
     expect(onSpeechEnd).toHaveBeenCalledOnce();
 
     // Silence timer restarted from trail->silence transition
-    vi.advanceTimersByTime(4000);
+    vi.advanceTimersByTime(6000);
     gate.process(makeSilence(4096));
     expect(onSilenceTimeout).not.toHaveBeenCalled();
   });
