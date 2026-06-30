@@ -2,7 +2,7 @@ import {
   journalAnalystSystemPrompt,
   journalAnalystTools,
 } from "@/lib/prompts/journal-analyst";
-import { DEEPSEEK_API_KEY } from "@/lib/env";
+import { DEEPSEEK_API_KEY, DEEPSEEK_URL, DEEPSEEK_MODEL, logLLMCall } from "@/lib/env";
 import {
   buildUserPrompt,
   sanitiseToolJson,
@@ -10,9 +10,6 @@ import {
   type AnalysisResult,
   type ExamType,
 } from "@/lib/utils";
-
-// The API may route deepseek-chat to deepseek-v4-flash; this is expected and does not affect functionality.
-const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
 // sprint: 30s timeout. Move to configurable timeout per-agent.
 const LLM_TIMEOUT_MS = 30000;
@@ -45,6 +42,8 @@ export async function analyseJournal(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
+  const t0 = Date.now();
+
   try {
     const res = await fetch(DEEPSEEK_URL, {
       method: "POST",
@@ -53,7 +52,7 @@ export async function analyseJournal(
         Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -76,6 +75,12 @@ export async function analyseJournal(
     }
 
     const data = await res.json();
+    const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    logLLMCall("journal-analyst", DEEPSEEK_MODEL, Date.now() - t0, {
+      prompt: usage?.prompt_tokens,
+      completion: usage?.completion_tokens,
+    });
+
     const toolCalls: ToolCall[] = data.choices?.[0]?.message?.tool_calls ?? [];
 
     if (toolCalls.length === 0) {

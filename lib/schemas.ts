@@ -3,17 +3,15 @@
 
 import { z } from "zod";
 
+const emailField = z.string().email().max(254).transform((s) => s.toLowerCase().trim());
+
 export const LoginInput = z.object({
-  username: z.string().min(1),
+  email: emailField,
   password: z.string().min(1),
 });
 
 export const RegisterInput = z.object({
-  username: z
-    .string()
-    .min(3)
-    .max(30)
-    .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, and underscores only"),
+  email: emailField,
   name: z.string().min(1).max(100),
   password: z.string().min(6).max(128),
   exam_type: z.enum(["NEET", "JEE", "CUET", "CAT", "GATE", "UPSC", "boards", "other"]),
@@ -25,6 +23,29 @@ export const RegisterInput = z.object({
       "Exam date must be in the future"
     )
     .optional(),
+});
+
+export const OtpRequestInput = z.object({
+  email: emailField,
+  purpose: z.enum(["signup", "reset"]),
+});
+
+export const OtpVerifyInput = z.object({
+  email: emailField,
+  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+  purpose: z.enum(["signup", "reset"]),
+});
+
+export const ResetPasswordInput = z.object({
+  email: emailField,
+  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+  password: z.string().min(6).max(128),
+});
+
+export const WaitlistInput = z.object({
+  email: emailField,
+  reason: z.enum(["voice", "chat", "general"]).default("general"),
+  note: z.string().max(500).optional(),
 });
 
 export const CheckInInput = z.object({

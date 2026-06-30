@@ -17,9 +17,14 @@ const store = new Map<string, RateLimitEntry>();
 const DEFAULTS: Record<string, RateLimitConfig> = {
   "auth:login": { maxRequests: 10, windowMs: 60_000 }, // 10/min
   "auth:register": { maxRequests: 5, windowMs: 60_000 }, // 5/min
+  "auth:otp-request": { maxRequests: 3, windowMs: 60_000 }, // 3/min per IP
+  "auth:otp-verify": { maxRequests: 10, windowMs: 60_000 }, // 10/min
+  "auth:reset": { maxRequests: 5, windowMs: 60_000 }, // 5/min
+  "waitlist": { maxRequests: 3, windowMs: 60_000 }, // 3/min
   "check-in": { maxRequests: 5, windowMs: 60_000 }, // 5/min
-  "chat": { maxRequests: 15, windowMs: 60_000 }, // 15/min
+  "chat": { maxRequests: 20, windowMs: 60_000 }, // 20/min
   "reframe": { maxRequests: 10, windowMs: 60_000 }, // 10/min
+  "talk:tts": { maxRequests: 30, windowMs: 60_000 }, // 30/min
 };
 
 function getClientIp(req: Request): string {

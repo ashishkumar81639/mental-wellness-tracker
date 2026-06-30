@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { streamCompanionReply } from "@/lib/agents/companion";
 import { coerceExamType } from "@/lib/utils";
 import { ChatInput } from "@/lib/schemas";
+import { CHAT_MSG_CAP } from "@/lib/budgets";
 
 export async function POST(req: Request) {
   const limited = rateLimit(req, "chat");
@@ -23,8 +24,8 @@ export async function POST(req: Request) {
 
     const { message } = parsed.data;
 
-    // These four reads only depend on the user id - run them in parallel.
-    const [users, journals, chatRows, latestMood] = await Promise.all([
+    // These five reads only depend on the user id - run them in parallel.
+    const [users, journals, chatRows, latestMood, msgCount] = await Promise.all([
       sql`SELECT name, exam_type FROM users WHERE id = ${username}`,
       // Recent journal summaries (last 7 entries for context)
       sql`
@@ -54,7 +55,20 @@ export async function POST(req: Request) {
         ORDER BY je.created_at DESC
         LIMIT 1
       `,
+      // Lifetime text budget: count user messages already sent.
+      sql`SELECT COUNT(*)::int AS n FROM chat_messages WHERE user_id = ${username} AND role = 'user'`,
     ]);
+
+    // Enforce the lifetime text budget. The count includes the message about
+    // to be inserted, so check against cap (the +1 for the current message).
+    if (msgCount[0].n >= CHAT_MSG_CAP) {
+      return jsonError(
+        "QUOTA_EXCEEDED",
+        "You've reached the free chat limit. Your journal and mood tracker still work!",
+        429,
+        { waitlist: true, reason: "chat" }
+      );
+    }
 
     if (users.length === 0) {
       return jsonError("NOT_FOUND", "User not found", 404);
@@ -90,17 +104,51 @@ export async function POST(req: Request) {
     let fullReply = "";
 
     // The companion starts each reply with a hidden tone tag like
-    // [[tone:gentle]]. We parse it off the front, emit it as its own SSE event
-    // (the voice client maps it to delivery), and keep it out of the displayed
-    // text and the stored message. Text chat never sees it.
-    const TAG_RE = /^\s*\[\[\s*tone\s*:\s*([a-zA-Z]+)\s*\]\]\s*/i;
+    // [[tone:gentle]] or [[gentle]]. We parse it off the front, emit it as its
+    // own SSE event (the voice client maps it to delivery), and keep it out of
+    // the displayed text and the stored message. Text chat never sees it.
+    // The LLM sometimes adds tone tags before each paragraph, not just once,
+    // so we also strip any mid-text tags after the initial one is resolved.
+    const TAG_RE = /^\s*\[\[\s*(?:tone\s*:\s*)?([a-zA-Z]+)\s*\]\]\s*/i;
+    const MID_TAG_RE = /\[\[\s*(?:tone\s*:\s*)?([a-zA-Z]+)\s*\]\]/g;
     let tagResolved = false;
     let tagBuf = "";
+    let stripBuf = "";
+
+    const persistReply = async () => {
+      if (fullReply.length > 0) {
+        await sql`
+          INSERT INTO chat_messages (user_id, role, content)
+          VALUES (${username}, 'assistant', ${fullReply})
+        `.catch(() => {}); // best-effort, don't break teardown
+      }
+    };
 
     const stream = new ReadableStream({
       async start(controller) {
         const emitToken = (t: string) => {
           if (!t) return;
+
+          // After the initial tag, strip any mid-text tone tags the LLM may
+          // emit before subsequent paragraphs. Buffer text around a potential
+          // incomplete [[ so we don't emit half a tag to the client.
+          if (tagResolved) {
+            let text = stripBuf + t;
+            stripBuf = "";
+            text = text.replace(MID_TAG_RE, "");
+            const lastOpen = text.lastIndexOf("[[");
+            if (lastOpen >= 0 && text.indexOf("]]", lastOpen) < 0) {
+              stripBuf = text.slice(lastOpen);
+              text = text.slice(0, lastOpen);
+            }
+            if (!text) return;
+            fullReply += text;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ token: text })}\n\n`)
+            );
+            return;
+          }
+
           fullReply += t;
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ token: t })}\n\n`)
@@ -133,10 +181,11 @@ export async function POST(req: Request) {
               emitToken(tagBuf.slice(match[0].length));
               tagBuf = "";
             } else {
-              // Stop buffering once the start can no longer be the tag, or we've
+              // Stop buffering once the start can no longer be a tag, or we've
               // waited long enough — then flush what we held as normal text.
-              const head = tagBuf.replace(/^\s+/, "").slice(0, 7);
-              const couldBeTag = "[[tone:".startsWith(head) || head === "[[tone:";
+              const head = tagBuf.replace(/^\s+/, "").slice(0, 40);
+              const couldBeTag =
+                head.startsWith("[[") && !head.includes("]]");
               if (!couldBeTag || tagBuf.length > 40) {
                 tagResolved = true;
                 emitToken(tagBuf);
@@ -145,16 +194,19 @@ export async function POST(req: Request) {
             }
           }
           if (!tagResolved) emitToken(tagBuf); // short reply: flush leftover
-
-          await sql`
-            INSERT INTO chat_messages (user_id, role, content)
-            VALUES (${username}, 'assistant', ${fullReply})
-          `;
+          if (stripBuf) {
+            fullReply += stripBuf;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ token: stripBuf })}\n\n`)
+            );
+          }
+          await persistReply();
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (err) {
           console.error("Chat stream error:", err);
+          await persistReply();
           const fallback =
             "I'm having a moment. Can you give me a second? Sometimes the connection gets a little slow.";
           controller.enqueue(
@@ -165,6 +217,9 @@ export async function POST(req: Request) {
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         }
+      },
+      async cancel() {
+        await persistReply();
       },
     });
 

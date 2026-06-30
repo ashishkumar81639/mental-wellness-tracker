@@ -45,8 +45,8 @@ describe("sanitiseToolJson", () => {
     expect(sanitiseToolJson('```\n{"b":2}\n```')).toEqual({ b: 2 });
   });
 
-  it("throws on completely invalid input", () => {
-    expect(() => sanitiseToolJson("not json at all {{{")).toThrow();
+  it("returns empty object on completely invalid input", () => {
+    expect(sanitiseToolJson("not json at all {{{")).toEqual({});
   });
 });
 
@@ -107,8 +107,10 @@ describe("coerceExamType", () => {
 });
 
 describe("calculateStreak", () => {
+  const jun27 = "2026-06-27";
+
   it("returns 0 for empty dates", () => {
-    expect(calculateStreak([], new Date("2026-06-27"))).toBe(0);
+    expect(calculateStreak([], jun27)).toBe(0);
   });
 
   it("returns 3 for 3 consecutive days ending today", () => {
@@ -117,27 +119,27 @@ describe("calculateStreak", () => {
       { entry_date: "2026-06-26" },
       { entry_date: "2026-06-25" },
     ];
-    expect(calculateStreak(dates, new Date("2026-06-27"))).toBe(3);
+    expect(calculateStreak(dates, jun27)).toBe(3);
   });
 
   it("skips today if missing and starts from yesterday", () => {
     const dates = [{ entry_date: "2026-06-26" }, { entry_date: "2026-06-25" }];
-    expect(calculateStreak(dates, new Date("2026-06-27"))).toBe(2);
+    expect(calculateStreak(dates, jun27)).toBe(2);
   });
 
   it("breaks on gap", () => {
     const dates = [{ entry_date: "2026-06-27" }, { entry_date: "2026-06-25" }];
-    expect(calculateStreak(dates, new Date("2026-06-27"))).toBe(1);
+    expect(calculateStreak(dates, jun27)).toBe(1);
   });
 
-  it("caps at 31 days", () => {
+  it("caps at dates length not at arbitrary bound", () => {
     const dates: Array<{ entry_date: string }> = [];
     for (let i = 0; i < 40; i++) {
-      const d = new Date("2026-06-27");
+      const d = new Date(jun27);
       d.setDate(d.getDate() - i);
       dates.push({ entry_date: d.toISOString().split("T")[0] });
     }
-    expect(calculateStreak(dates, new Date("2026-06-27"))).toBe(31);
+    expect(calculateStreak(dates, jun27)).toBe(40);
   });
 });
 

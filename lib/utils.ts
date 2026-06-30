@@ -51,7 +51,11 @@ export function sanitiseToolJson(raw: string): Record<string, unknown> {
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/\s*```$/, "")
       .trim();
-    return JSON.parse(cleaned);
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -98,18 +102,29 @@ export function parseAnalysis(
 /**
  * Calculate the streak of consecutive days with a journal entry ending at today.
  * If today has no entry, the streak starts counting from yesterday backward.
+ * `todayKey` should be in the same timezone as the DB dates (IST for this app).
  */
 export function calculateStreak(
   dates: Array<{ entry_date: string }>,
-  today: Date = new Date()
+  todayKey?: string
 ): number {
   const dateSet = new Set(dates.map((r) => r.entry_date));
+
+  // Use provided todayKey (database's timezone) or compute from system clock
+  const today = todayKey ?? new Date().toISOString().split("T")[0];
   let streak = 0;
 
-  for (let i = 0; i < 31; i++) {
-    const d = new Date(today);
+  // Derive loop bound from the data so we never undercount a long streak.
+  const parts = today.split("-");
+  const todayDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+
+  for (let i = 0; i < dates.length + 1; i++) {
+    const d = new Date(todayDate);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().split("T")[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const key = `${year}-${month}-${day}`;
     if (dateSet.has(key)) {
       streak++;
     } else if (i === 0) {
@@ -176,6 +191,15 @@ export function buildStressForecast(
   }
 
   return forecast;
+}
+
+/** Strip empty coping fields so the UI never shows blank Strategy/Mindfulness cards. */
+export function cleanCoping(coping: { strategy: string; mindfulness: string; nudge: string }) {
+  const result: Record<string, string> = {};
+  if (coping.strategy) result.strategy = coping.strategy;
+  if (coping.mindfulness) result.mindfulness = coping.mindfulness;
+  result.nudge = coping.nudge;
+  return result;
 }
 
 /** Stage-appropriate coping copy keyed off days remaining to the exam. */

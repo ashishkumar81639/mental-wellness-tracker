@@ -1,9 +1,7 @@
 import { companionSystemPrompt } from "@/lib/prompts/companion";
-import { DEEPSEEK_API_KEY } from "@/lib/env";
+import { DEEPSEEK_API_KEY, DEEPSEEK_URL, DEEPSEEK_MODEL, logLLMCall } from "@/lib/env";
 import type { ExamType } from "@/lib/utils";
 
-// The API may route deepseek-chat to deepseek-v4-flash; this is expected behaviour and does not affect functionality.
-const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 const LLM_TIMEOUT_MS = 45000;
 
 interface ChatMessage {
@@ -24,21 +22,21 @@ export function buildCompanionMessages(
   chatHistory: ChatMessage[],
   userMessage: string
 ): Array<{ role: string; content: string }> {
-  const messages: Array<{ role: string; content: string }> = [
-    { role: "system", content: systemPrompt },
-  ];
-
-  // Inject journal summaries as a context-only system message
+  // Inject journal summaries directly into the one system prompt so the
+  // message list starts with a single system turn. A second system message
+  // mid-conversation may be dropped or merged silently by some backends.
+  let prompt = systemPrompt;
   if (recentJournals.length > 0) {
     let journalBlock = "Recent journal summaries:\n";
     for (const j of recentJournals) {
       journalBlock += `- ${j.date}: emotion=[${j.emotion}], summary=[${j.summary}]\n`;
     }
-    messages.push({
-      role: "system",
-      content: `CONTEXT (use this for personalization; do not repeat verbatim):\n${journalBlock}`,
-    });
+    prompt += `\n\nCONTEXT (use this for personalization; do not repeat verbatim):\n${journalBlock}`;
   }
+
+  const messages: Array<{ role: string; content: string }> = [
+    { role: "system", content: prompt },
+  ];
 
   // Replay last 6 chat turns for continuity (ascending order = oldest first)
   const recent = chatHistory.slice(-6);
@@ -77,6 +75,9 @@ export async function* streamCompanionReply(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
+  const t0 = Date.now();
+  let tokensYielded = 0;
+
   try {
     const res = await fetch(DEEPSEEK_URL, {
       method: "POST",
@@ -85,7 +86,7 @@ export async function* streamCompanionReply(
         Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: DEEPSEEK_MODEL,
         messages,
         stream: true,
         temperature: 0.7,
@@ -114,8 +115,8 @@ export async function* streamCompanionReply(
           const dataStr = trimmed.slice(6);
           try {
             const parsed = JSON.parse(dataStr);
-            const token = parsed.choices?.[0]?.delta?.content;
-            if (token) yield token;
+           const token = parsed.choices?.[0]?.delta?.content;
+           if (token) { tokensYielded++; yield token; }
           } catch {
             // skip unparseable final chunk
           }
@@ -144,5 +145,6 @@ export async function* streamCompanionReply(
     }
   } finally {
     clearTimeout(timeout);
+    logLLMCall("companion", DEEPSEEK_MODEL, Date.now() - t0, { completion: tokensYielded });
   }
 }

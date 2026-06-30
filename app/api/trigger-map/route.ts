@@ -27,8 +27,10 @@ export async function GET(req: Request) {
       LIMIT 50
     `;
 
-    const nodeMap = new Map<string, { id: string; label: string; type: "trigger" | "emotion" | "coping"; latestDate?: string }>();
-    const edgeMap = new Map<string, number>();
+    const nodes: Array<{ id: string; label: string; type: "trigger" | "emotion" | "coping"; latestDate?: string }> = [];
+    const edges: Array<{ from: string; to: string; weight: number }> = [];
+    const nodeSeen = new Set<string>();
+    const edgeWeights = new Map<string, number>();
 
     for (const row of rows) {
       const triggerId = `trigger:${row.trigger_label}`;
@@ -37,34 +39,38 @@ export async function GET(req: Request) {
       const copingId = `coping:${copingLabel}`;
 
       // Nodes (track latest date for trigger nodes so frontend can sort by recency)
-      if (!nodeMap.has(triggerId)) {
-        nodeMap.set(triggerId, { id: triggerId, label: row.trigger_label, type: "trigger", latestDate: row.entry_date });
+      if (!nodeSeen.has(triggerId)) {
+        nodeSeen.add(triggerId);
+        nodes.push({ id: triggerId, label: row.trigger_label, type: "trigger", latestDate: row.entry_date });
       } else {
-        const existing = nodeMap.get(triggerId)!;
+        const existing = nodes.find((n) => n.id === triggerId)!;
         if (row.entry_date > (existing.latestDate ?? "")) {
           existing.latestDate = row.entry_date;
         }
       }
-      if (!nodeMap.has(emotionId)) {
-        nodeMap.set(emotionId, { id: emotionId, label: row.emotion, type: "emotion" });
+      if (!nodeSeen.has(emotionId)) {
+        nodeSeen.add(emotionId);
+        nodes.push({ id: emotionId, label: row.emotion, type: "emotion" });
       }
-      if (!nodeMap.has(copingId)) {
-        nodeMap.set(copingId, { id: copingId, label: copingLabel, type: "coping" });
+      if (!nodeSeen.has(copingId)) {
+        nodeSeen.add(copingId);
+        nodes.push({ id: copingId, label: copingLabel, type: "coping" });
       }
 
-      // Edges: trigger -> emotion, emotion -> coping
-      const e1 = `${triggerId}->${emotionId}`;
-      edgeMap.set(e1, (edgeMap.get(e1) ?? 0) + 1);
-
-      const e2 = `${emotionId}->${copingId}`;
-      edgeMap.set(e2, (edgeMap.get(e2) ?? 0) + 1);
+      // Edges: trigger -> emotion, emotion -> coping. Store structured from/to so
+      // labels containing "->" cannot corrupt the graph.
+      const bump = (from: string, to: string) => {
+        const key = `${from}\0${to}`;
+        edgeWeights.set(key, (edgeWeights.get(key) ?? 0) + 1);
+      };
+      bump(triggerId, emotionId);
+      bump(emotionId, copingId);
     }
 
-    const nodes = Array.from(nodeMap.values());
-    const edges = Array.from(edgeMap.entries()).map(([key, weight]) => {
-      const [from, to] = key.split("->");
-      return { from, to, weight };
-    });
+    for (const [key, weight] of edgeWeights) {
+      const sep = key.indexOf("\0");
+      edges.push({ from: key.slice(0, sep), to: key.slice(sep + 1), weight });
+    }
 
     return cachedJson({ nodes, edges });
   } catch (err) {

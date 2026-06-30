@@ -26,7 +26,7 @@ export function getTTS(config: ProviderConfig): TTSProvider {
 export function providerConfig(): ProviderConfig {
   return {
     stt: process.env.STT_PROVIDER || "assembly",
-    tts: process.env.TTS_PROVIDER || "assembly",
+    tts: process.env.TTS_PROVIDER || "sarvam",
   };
 }
 

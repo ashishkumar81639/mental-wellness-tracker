@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatChatText } from "@/lib/format-chat";
 import { MicIcon } from "@/components/icons";
 import { useVoiceConversation } from "@/lib/voice/use-voice-conversation";
+import { WaitlistModal } from "@/components/waitlist-modal";
 
 interface Message {
   role: "user" | "assistant";
@@ -21,13 +22,20 @@ const PHASE_HINT: Record<string, string> = {
   speaking: "Speaking…",
 };
 
+const VOICE_EXHAUSTED = "You've used your free voice time. You can still chat by text!";
+
 export default function TalkPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("loading");
+  const [showWaitlist, setShowWaitlist] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const userEmail = (() => {
+    try { return JSON.parse(localStorage.getItem("user") ?? "{}")?.email ?? ""; }
+    catch { return ""; }
+  })();
 
   const appendMessage = useCallback((role: Message["role"], content: string) => {
     setMessages((prev) => [...prev, { role, content }]);
@@ -59,6 +67,10 @@ export default function TalkPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamedText, partialTranscript]);
+
+  useEffect(() => {
+    if (error === VOICE_EXHAUSTED) setShowWaitlist(true);
+  }, [error]);
 
   async function checkVoiceAvailability() {
     try {
@@ -163,12 +175,30 @@ export default function TalkPage() {
         <div className="bg-yellow-50 border-t border-yellow-200 px-lg py-sm">
           <p className="text-caption text-yellow-800 flex items-center gap-sm">
             <span role="img" aria-hidden="true">&#9888;</span> {error}
+            {error === VOICE_EXHAUSTED && (
+              <button
+                onClick={() => setShowWaitlist(true)}
+                className="text-yellow-800 underline font-medium ml-sm"
+              >
+                Join waitlist
+              </button>
+            )}
             <button onClick={dismissError} className="ml-auto text-yellow-600 hover:text-yellow-800 font-medium">
               Dismiss
             </button>
           </p>
         </div>
       )}
+
+      <WaitlistModal
+        open={showWaitlist}
+        reason="voice"
+        email={userEmail}
+        onClose={() => {
+          setShowWaitlist(false);
+          dismissError();
+        }}
+      />
 
       {/* Voice-only control bar */}
       <div className="border-t border-hairline bg-canvas px-lg py-lg">

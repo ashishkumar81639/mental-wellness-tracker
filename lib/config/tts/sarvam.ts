@@ -21,7 +21,7 @@ const DEFAULT_PACE = 0.9;
  * Sarvam TTS - warm Indian voice, good Hindi/English code-mixed quality.
  * Currently uses the "simran" speaker on bulbul:v3.
  * Sarvam returns JSON with base64-encoded WAV audio in an "audios" array.
- * We decode it and return as binary audio/wav stream.
+ * Each chunk is a standalone WAV; we concatenate their PCM data into one WAV.
  */
 export const sarvamTTS: TTSProvider = {
   name: "sarvam",
@@ -72,12 +72,40 @@ export const sarvamTTS: TTSProvider = {
       return new Response(null, { status: 502, statusText: "Empty audio from TTS" });
     }
 
-    const wavBuffer = Buffer.from(data.audios[0], "base64");
+    // Concatenate all WAV chunks: strip 44-byte header from chunks after the
+    // first, merge PCM data, then rewrite a single WAV header with total size.
+    const wavs = data.audios.map((b64) => Buffer.from(b64, "base64"));
+    const HEADER_LEN = 44;
+    if (wavs.length === 1) {
+      return new Response(wavs[0], {
+        headers: { "Content-Type": "audio/wav", "Content-Length": String(wavs[0].length) },
+      });
+    }
 
-    return new Response(wavBuffer, {
+    const header = Buffer.from(wavs[0].subarray(0, HEADER_LEN));
+    const pcmParts: Buffer[] = [];
+    let totalPcm = 0;
+    for (const w of wavs) {
+      const pcm = w.subarray(HEADER_LEN);
+      pcmParts.push(pcm);
+      totalPcm += pcm.length;
+    }
+
+    // Patch the header with the new total size (offset 4 = file size, offset 40 = data size).
+    const combined = Buffer.alloc(HEADER_LEN + totalPcm);
+    header.copy(combined, 0);
+    combined.writeUInt32LE(combined.length - 8, 4);
+    combined.writeUInt32LE(totalPcm, 40);
+    let offset = HEADER_LEN;
+    for (const pcm of pcmParts) {
+      pcm.copy(combined, offset);
+      offset += pcm.length;
+    }
+
+    return new Response(combined, {
       headers: {
         "Content-Type": "audio/wav",
-        "Content-Length": String(wavBuffer.length),
+        "Content-Length": String(combined.length),
       },
     });
   },

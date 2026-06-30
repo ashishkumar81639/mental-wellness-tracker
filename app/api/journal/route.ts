@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, jsonError, cachedJson } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { JournalQuery } from "@/lib/schemas";
+import { cleanCoping } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -47,11 +48,7 @@ export async function GET(req: NextRequest) {
 
     const entries = rows.map((row) => {
       const copingRaw = row.coping_json as { strategy?: string; mindfulness?: string; nudge?: string } | null;
-      const coping = copingRaw
-        ? Object.fromEntries(
-            Object.entries(copingRaw).filter(([k, v]) => k === "nudge" || (typeof v === "string" && v.length > 0))
-          )
-        : null;
+      const coping = copingRaw ? cleanCoping(copingRaw as { strategy: string; mindfulness: string; nudge: string }) : null;
 
       return {
         entry_id: row.entry_id,

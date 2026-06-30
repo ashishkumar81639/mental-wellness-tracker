@@ -2,14 +2,28 @@
 -- Run once against DATABASE_URL. Idempotent: safe to re-run.
 
 CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  name          TEXT NOT NULL,
-  password_hash TEXT NOT NULL,                 -- bcrypt hash
-  exam_type     TEXT NOT NULL,                 -- NEET, JEE, CUET, CAT, GATE, UPSC, boards, other
-  exam_date     DATE,
-  persona_pref  TEXT NOT NULL DEFAULT 'adaptive', -- calm | hype | adaptive
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  password_hash    TEXT NOT NULL,                 -- bcrypt hash
+  email            TEXT UNIQUE,                   -- login identity (verified via OTP)
+  email_verified   BOOLEAN NOT NULL DEFAULT FALSE,
+  exam_type        TEXT NOT NULL,                 -- NEET, JEE, CUET, CAT, GATE, UPSC, boards, other
+  exam_date        DATE,
+  voice_chars_used BIGINT NOT NULL DEFAULT 0,     -- lifetime TTS spend (Sarvam ₹0.003/char)
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Email/OTP support. Codes are hashed (bcrypt) so a DB leak cannot replay OTPs.
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id          BIGSERIAL PRIMARY KEY,
+  email       TEXT NOT NULL,
+  purpose     TEXT NOT NULL CHECK (purpose IN ('signup', 'reset')),
+  code_hash   TEXT NOT NULL,                    -- bcrypt hash of the 6-digit code
+  expires_at  TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_otp_active ON otp_codes (email, purpose) WHERE consumed_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS journal_entries (
   id         BIGSERIAL PRIMARY KEY,
@@ -63,3 +77,15 @@ CREATE INDEX IF NOT EXISTS idx_analysis_entry      ON ai_analysis (entry_id);
 CREATE INDEX IF NOT EXISTS idx_triggers_analysis   ON triggers (analysis_id);
 CREATE INDEX IF NOT EXISTS idx_triggers_label      ON triggers (label);
 CREATE INDEX IF NOT EXISTS idx_chat_user_time      ON chat_messages (user_id, created_at);
+
+-- Waitlist: demand signal for the payment-gateway trigger (LAUNCH-PREP §5).
+-- Captured when a user hits a quota limit and wants more. Email is unique so
+-- repeated clicks from the same user count once.
+CREATE TABLE IF NOT EXISTS waitlist (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+  email      TEXT NOT NULL UNIQUE,
+  reason     TEXT,                              -- 'voice' | 'chat' | 'general'
+  note       TEXT,                              -- optional free-text intent
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

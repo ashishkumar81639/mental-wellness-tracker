@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { formatChatText } from "@/lib/format-chat";
+import { WaitlistModal } from "@/components/waitlist-modal";
 
 interface Message {
   role: "user" | "assistant";
@@ -16,10 +17,15 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState("");
+  const [quotaError, setQuotaError] = useState<{ message: string; reason: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const userEmail = (() => {
+    try { return JSON.parse(localStorage.getItem("user") ?? "{}")?.email ?? ""; }
+    catch { return ""; }
+  })();
 
   function authHeaders(): Record<string, string> {
     return {
@@ -59,7 +65,17 @@ export default function ChatPage() {
         headers: authHeaders(),
         body: JSON.stringify({ message: userMessage.content }),
       });
-      if (!res.ok) throw new Error("Stream failed");
+      if (!res.ok) {
+        if (res.status === 429) {
+          const d = await res.json().catch(() => ({}));
+          setQuotaError({
+            message: d.error ?? "You've reached the free chat limit.",
+            reason: d.reason ?? "chat",
+          });
+          setMessages((prev) => prev.filter((m) => m !== userMessage));
+        }
+        throw new Error("Stream failed");
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No reader");
@@ -169,6 +185,13 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+
+      <WaitlistModal
+        open={quotaError !== null}
+        reason={(quotaError?.reason as "voice" | "chat") ?? "chat"}
+        email={userEmail}
+        onClose={() => setQuotaError(null)}
+      />
     </div>
   );
 }

@@ -32,7 +32,12 @@ export async function verifyToken(
     const sub = payload.sub;
     if (typeof sub !== "string") return null;
     return { username: sub };
-  } catch {
+  } catch (err) {
+    // Log unexpected errors (misconfigured secret, crypto failure) but not
+    // expected invalid-token errors from jwtVerify.
+    if (err instanceof Error && err.name !== "JWTExpired" && !String(err).includes("signature")) {
+      console.error("[auth] verifyToken unexpected error:", err);
+    }
     return null;
   }
 }

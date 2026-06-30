@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSentenceChunker } from "@/lib/voice/speech-text";
 import { TtsStreamPlayer } from "@/lib/voice/tts-stream-player";
+import { createVadGate, type VadGate, type VadConfig } from "@/lib/voice/vad";
 import type { VoiceTone } from "@/lib/config/types";
+import { STT_SESSION_TIMEOUT_MS } from "@/lib/budgets";
 
 /**
  * Drives a hands-free, continuous voice conversation:
@@ -51,6 +53,8 @@ interface UseVoiceConversationArgs {
   onUserMessage: (text: string) => void;
   /** Append Yaar's finalized reply to the transcript. */
   onAssistantMessage: (text: string) => void;
+  /** Tune the VAD thresholds. Defaults work for built-in mics at normal distance. */
+  vadConfig?: VadConfig;
 }
 
 interface UseVoiceConversation {
@@ -71,19 +75,11 @@ const WS_OPEN_TIMEOUT_MS = 10_000;
 // Safety cap so a runaway reply can't queue an unbounded number of TTS calls.
 const MAX_SPEAK_CHARS = 1_500;
 
-function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
-  const out = new Int16Array(float32.length);
-  for (let i = 0; i < float32.length; i++) {
-    const s = Math.max(-1, Math.min(1, float32[i]));
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return out.buffer;
-}
-
 export function useVoiceConversation({
   token,
   onUserMessage,
   onAssistantMessage,
+  vadConfig,
 }: UseVoiceConversationArgs): UseVoiceConversation {
   const [phase, setPhaseState] = useState<VoicePhase>("idle");
   const [partialTranscript, setPartialTranscript] = useState("");
@@ -103,6 +99,9 @@ export function useVoiceConversation({
   const ttsPrimedRef = useRef(false);
   const playerRef = useRef<TtsStreamPlayer | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const vadGateRef = useRef<VadGate | null>(null);
+  // STT session timeout: auto-end so a parked tab can't rack Assembly cost.
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setPhase = useCallback((next: VoicePhase) => {
     phaseRef.current = next;
@@ -157,6 +156,10 @@ export function useVoiceConversation({
 
   // --- Teardown: idempotent, releases every resource ---------------------
   const teardown = useCallback(() => {
+    if (sessionTimerRef.current) {
+      clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
     abortRef.current?.abort();
     abortRef.current = null;
 
@@ -168,6 +171,10 @@ export function useVoiceConversation({
       processorRef.current.onaudioprocess = null;
       processorRef.current.disconnect();
       processorRef.current = null;
+    }
+    if (vadGateRef.current) {
+      vadGateRef.current.destroy();
+      vadGateRef.current = null;
     }
     if (captureCtxRef.current && captureCtxRef.current.state !== "closed") {
       captureCtxRef.current.close().catch(() => {});
@@ -279,13 +286,21 @@ export function useVoiceConversation({
           }),
           signal,
         });
+        if (res.status === 429) {
+          // Voice budget exhausted. End the session and tell the user text
+          // chat still works - don't silently keep dropping audio.
+          setError("You've used your free voice time. You can still chat by text!");
+          setPhase("idle");
+          teardown();
+          return null;
+        }
         if (!res.ok) return null;
         return await res.arrayBuffer();
       } catch {
         return null; // aborted or network error: skip this chunk
       }
     },
-    [token]
+    [token, teardown, setPhase]
   );
 
   // --- One full turn: reply streams → sentences synthesize + play as they
@@ -347,6 +362,7 @@ export function useVoiceConversation({
         playerRef.current = null;
         abortRef.current = null;
         setPhase("listening"); // recoverable failure: keep the mic open
+        vadGateRef.current?.reset();
         return;
       }
 
@@ -357,6 +373,7 @@ export function useVoiceConversation({
       playerRef.current = null;
       abortRef.current = null;
       if (isStopped()) return;
+      vadGateRef.current?.reset();
       setPhase("listening");
     },
     [
@@ -401,12 +418,35 @@ export function useVoiceConversation({
           const source = ctx.createMediaStreamSource(stream);
           const processor = ctx.createScriptProcessor(4096, 1, 1);
           processorRef.current = processor;
+
+          // VAD gate: only forward audio to Assembly when the user is speaking.
+          // Silence is never sent, cutting billing by 70-90%.
+          const gate = createVadGate(
+            cfg.sampleRate,
+            4096,
+            {
+              onSpeechEnd: () => {
+                const transcript = transcriptRef.current.trim();
+                if (transcript && phaseRef.current === "listening") {
+                  void runTurn(transcript);
+                }
+              },
+              onSilenceTimeout: () => {
+                if (phaseRef.current === "idle" || phaseRef.current === "error") return;
+                setPhase("idle");
+                setError("Mic paused — no speech detected for a while. Tap to resume.");
+                teardown();
+              },
+            },
+            vadConfig,
+          );
+          vadGateRef.current = gate;
+
           processor.onaudioprocess = (e) => {
-            // Gate: only forward audio while actively listening. This is what
-            // stops Yaar's TTS from being transcribed back into the convo.
             if (phaseRef.current !== "listening") return;
             if (ws.readyState !== WebSocket.OPEN) return;
-            ws.send(floatTo16BitPCM(e.inputBuffer.getChannelData(0)));
+            const pcms = gate.process(e.inputBuffer.getChannelData(0));
+            if (pcms) for (const pcm of pcms) ws.send(pcm);
           };
           source.connect(processor);
           processor.connect(ctx.destination);
@@ -462,31 +502,38 @@ export function useVoiceConversation({
     // speak. We don't fail the conversation if this can't run — STT still works.
     await ensureTtsContext();
 
-    setPhase("connecting");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-      // The mic is live now. If the user stopped or navigated away while it was
-      // being acquired, we're no longer "connecting" — release the track right
-      // away instead of leaking a held mic onto a dead session.
-      if (isStopped()) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      streamRef.current = stream;
-      await openSession(stream);
-      if (isStopped()) {
-        teardown(); // stopped during the socket handshake
-        return;
-      }
-      setPhase("listening");
-    } catch (err) {
+      setPhase("connecting");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+        // The mic is live now. If the user stopped or navigated away while it was
+        // being acquired, we're no longer "connecting" — release the track right
+        // away instead of leaking a held mic onto a dead session.
+        if (isStopped()) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        await openSession(stream);
+        if (isStopped()) {
+          teardown(); // stopped during the socket handshake
+          return;
+        }
+        // STT bills by mic-open duration. Auto-end after the cap so a parked
+        // tab can't rack Assembly cost indefinitely.
+        sessionTimerRef.current = setTimeout(() => {
+          setError("Voice session ended after 10 minutes. Tap the mic to start again.");
+          setPhase("idle");
+          teardown();
+        }, STT_SESSION_TIMEOUT_MS);
+        setPhase("listening");
+      } catch (err) {
       teardown();
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError("Microphone access denied.");

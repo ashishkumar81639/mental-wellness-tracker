@@ -41,7 +41,7 @@ describe("CheckInInput", () => {
 describe("RegisterInput", () => {
   it("accepts a valid registration", () => {
     const r = RegisterInput.safeParse({
-      username: "demo_user",
+      email: "demo@yaarhelp.in",
       name: "Demo",
       password: "secret1",
       exam_type: "JEE",
@@ -52,7 +52,7 @@ describe("RegisterInput", () => {
 
   it("rejects an unknown exam_type", () => {
     const r = RegisterInput.safeParse({
-      username: "demo_user",
+      email: "demo@yaarhelp.in",
       name: "Demo",
       password: "secret1",
       exam_type: "SAT",
@@ -60,9 +60,9 @@ describe("RegisterInput", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects uppercase usernames", () => {
+  it("rejects a malformed email", () => {
     const r = RegisterInput.safeParse({
-      username: "DemoUser",
+      email: "not-an-email",
       name: "Demo",
       password: "secret1",
       exam_type: "JEE",
@@ -72,7 +72,7 @@ describe("RegisterInput", () => {
 
   it("rejects a malformed exam_date", () => {
     const r = RegisterInput.safeParse({
-      username: "demo_user",
+      email: "demo@yaarhelp.in",
       name: "Demo",
       password: "secret1",
       exam_type: "JEE",
@@ -84,7 +84,11 @@ describe("RegisterInput", () => {
 
 describe("LoginInput / ChatInput / ReframeInput", () => {
   it("login rejects empty credentials", () => {
-    expect(LoginInput.safeParse({ username: "", password: "" }).success).toBe(false);
+    expect(LoginInput.safeParse({ email: "", password: "" }).success).toBe(false);
+  });
+
+  it("login rejects a malformed email", () => {
+    expect(LoginInput.safeParse({ email: "nope", password: "x" }).success).toBe(false);
   });
 
   it("chat rejects an empty message", () => {

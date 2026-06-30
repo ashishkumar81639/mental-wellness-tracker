@@ -17,12 +17,11 @@ export async function GET(req: Request) {
     const [users, moodRows] = await Promise.all([
       sql`SELECT exam_type, exam_date FROM users WHERE id = ${username}`,
       sql`
-        SELECT ROUND(AVG(ml.mood)::numeric, 1) AS mood
+        SELECT ml.mood
         FROM mood_logs ml
         JOIN journal_entries je ON ml.entry_id = je.id
         WHERE je.user_id = ${username}
           AND ml.created_at >= now() - INTERVAL '7 days'
-        GROUP BY ml.created_at::date
       `,
     ]);
 

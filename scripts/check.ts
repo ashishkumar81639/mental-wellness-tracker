@@ -29,7 +29,7 @@ async function main() {
   const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "demo_user", password: "demo123" }),
+    body: JSON.stringify({ email: "demo@yaarhelp.in", password: "demo123" }),
   });
 
   if (!loginRes.ok) {

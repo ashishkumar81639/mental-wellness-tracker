@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
     }));
 
     const streak = calculateStreak(
-      streakRows.map((r) => ({ entry_date: r.entry_date as string }))
+      streakRows.map((r) => ({ entry_date: r.entry_date as string })),
+      new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
     );
 
     return cachedJson({ moodTrend, topTriggers, emotionDistribution, streak });

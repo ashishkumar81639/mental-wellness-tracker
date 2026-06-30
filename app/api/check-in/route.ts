@@ -2,18 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, jsonError, rateLimit } from "@/lib/route-utils";
 import { sql } from "@/lib/db";
 import { analyseJournal } from "@/lib/agents/journal-analyst";
-import { coerceExamType } from "@/lib/utils";
+import { coerceExamType, cleanCoping } from "@/lib/utils";
 import { CheckInInput } from "@/lib/schemas";
 import { z } from "zod";
-
-/** Strip empty coping fields so the UI never shows blank Strategy/Mindfulness cards. */
-function cleanCoping(coping: { strategy: string; mindfulness: string; nudge: string }) {
-  const result: Record<string, string> = {};
-  if (coping.strategy) result.strategy = coping.strategy;
-  if (coping.mindfulness) result.mindfulness = coping.mindfulness;
-  result.nudge = coping.nudge;
-  return result;
-}
 
 export async function POST(req: Request) {
   const limited = rateLimit(req, "check-in");
@@ -96,8 +87,8 @@ export async function POST(req: Request) {
       const sentiments = analysis.triggers.map((t) => t.sentiment);
       await sql`
         INSERT INTO triggers (analysis_id, label, category, sentiment)
-        SELECT ${analysisId}, *
-        FROM UNNEST(${labels}::text[], ${categories}::text[], ${sentiments}::int[])
+        SELECT ${analysisId}, label, category, sentiment
+        FROM UNNEST(${labels}::text[], ${categories}::text[], ${sentiments}::int[]) AS t(label, category, sentiment)
       `;
     }
 

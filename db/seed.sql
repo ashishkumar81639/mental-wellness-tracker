@@ -1,16 +1,21 @@
 -- Seed data so the demo looks alive on first load.
--- JWT auth: demo_user / demo123.
+-- JWT auth: demo@yaarhelp.in / demo123.
 -- Non-destructive: uses ON CONFLICT to skip if data already exists.
 
-INSERT INTO users (id, name, password_hash, exam_type, exam_date, persona_pref)
+INSERT INTO users (id, name, password_hash, email, email_verified, exam_type, exam_date, persona_pref)
 VALUES (
   'demo_user',
   'Aarav',
   '$2a$10$K8MqZWJKSf57r1bE0VRSuOYIiS5Helx3KPI14WGL/Q21toBtySyIS',
+  'demo@yaarhelp.in',
+  TRUE,
   'JEE',
   CURRENT_DATE + INTERVAL '21 days',
   'adaptive'
-) ON CONFLICT (id) DO NOTHING;
+) ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      email_verified = TRUE
+  WHERE users.email IS NULL;
 
 -- Journal entries: one per day, Wednesday through Monday, covering a full week.
 -- Day 1 (Wednesday 5 days ago): overwhelmed before a mock test.
