@@ -1,5 +1,4 @@
 import type { TTSProvider, VoiceTone } from "../types";
-import { splitForSpeech } from "@/lib/voice/speech-text";
 
 /**
  * Maps an emotional tone to a speaking pace. bulbul:v3 only exposes `pace`
@@ -19,9 +18,13 @@ const DEFAULT_PACE = 0.9;
 
 /**
  * Sarvam TTS - warm Indian voice, good Hindi/English code-mixed quality.
- * Currently uses the "simran" speaker on bulbul:v3.
- * Sarvam returns JSON with base64-encoded WAV audio in an "audios" array.
- * Each chunk is a standalone WAV; we concatenate their PCM data into one WAV.
+ * Uses the streaming endpoint which returns raw binary MP3 audio directly
+ * (no base64, no JSON, no WAV concatenation). The response stream is piped
+ * straight through to the client, so audio bytes start arriving as soon as
+ * Sarvam generates them.
+ *
+ * Endpoint: POST /text-to-speech/stream
+ * Max text: 3500 chars per request (vs 500 on the non-streaming endpoint).
  */
 export const sarvamTTS: TTSProvider = {
   name: "sarvam",
@@ -32,80 +35,37 @@ export const sarvamTTS: TTSProvider = {
       throw new Error("SARVAM_API_KEY not configured");
     }
 
-    const upstream = await fetch("https://api.sarvam.ai/text-to-speech", {
+    const upstream = await fetch("https://api.sarvam.ai/text-to-speech/stream", {
       method: "POST",
       headers: {
         "api-subscription-key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // bulbul:v3 is the warmest/least synthetic model and hosts the "simran"
-        // voice. Note: v3 rejects `pitch`/`loudness` — do not add them.
         model: "bulbul:v3",
-        // Sarvam caps each input string at 500 chars; longer replies are split
-        // here and Sarvam concatenates the clips into a single audio response.
-        inputs: splitForSpeech(text, 500),
+        text,
         target_language_code: language === "hi" ? "hi-IN" : "en-IN",
         speaker: "simran",
-        // Pace carries the emotion (v3's only prosody lever). Default is a touch
-        // slower than 1.0, which reads as more empathetic and less clipped.
         pace: tone ? TONE_PACE[tone] : DEFAULT_PACE,
-        // Normalizes numbers, abbreviations and code-mixed Hindi/English so the
-        // delivery sounds natural rather than spelled-out.
         enable_preprocessing: true,
+        output_audio_codec: "mp3",
+        output_audio_bitrate: "64k",
       }),
     });
 
     if (!upstream.ok) {
-      // Pass through the upstream error so the route handler can log and return 503
       return new Response(upstream.body, {
         status: upstream.status,
         headers: upstream.headers,
       });
     }
 
-    const data = (await upstream.json()) as {
-      audios?: string[];
-    };
-
-    if (!data.audios || data.audios.length === 0) {
-      return new Response(null, { status: 502, statusText: "Empty audio from TTS" });
-    }
-
-    // Concatenate all WAV chunks: strip 44-byte header from chunks after the
-    // first, merge PCM data, then rewrite a single WAV header with total size.
-    const wavs = data.audios.map((b64) => Buffer.from(b64, "base64"));
-    const HEADER_LEN = 44;
-    if (wavs.length === 1) {
-      return new Response(wavs[0], {
-        headers: { "Content-Type": "audio/wav", "Content-Length": String(wavs[0].length) },
-      });
-    }
-
-    const header = Buffer.from(wavs[0].subarray(0, HEADER_LEN));
-    const pcmParts: Buffer[] = [];
-    let totalPcm = 0;
-    for (const w of wavs) {
-      const pcm = w.subarray(HEADER_LEN);
-      pcmParts.push(pcm);
-      totalPcm += pcm.length;
-    }
-
-    // Patch the header with the new total size (offset 4 = file size, offset 40 = data size).
-    const combined = Buffer.alloc(HEADER_LEN + totalPcm);
-    header.copy(combined, 0);
-    combined.writeUInt32LE(combined.length - 8, 4);
-    combined.writeUInt32LE(totalPcm, 40);
-    let offset = HEADER_LEN;
-    for (const pcm of pcmParts) {
-      pcm.copy(combined, offset);
-      offset += pcm.length;
-    }
-
-    return new Response(combined, {
+    // Pipe the binary audio stream straight through. The TTS route will
+    // forward this to the client without buffering — audio arrives as chunks.
+    return new Response(upstream.body, {
       headers: {
-        "Content-Type": "audio/wav",
-        "Content-Length": String(combined.length),
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "private, max-age=300",
       },
     });
   },
