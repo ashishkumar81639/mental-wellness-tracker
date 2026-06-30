@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSentenceChunker } from "@/lib/voice/speech-text";
 import { TtsStreamPlayer } from "@/lib/voice/tts-stream-player";
-import { createVadGate, type VadGate, type VadConfig } from "@/lib/voice/vad";
 import type { VoiceTone } from "@/lib/config/types";
 import { STT_SESSION_TIMEOUT_MS } from "@/lib/budgets";
 
@@ -53,8 +52,6 @@ interface UseVoiceConversationArgs {
   onUserMessage: (text: string) => void;
   /** Append Yaar's finalized reply to the transcript. */
   onAssistantMessage: (text: string) => void;
-  /** Tune the VAD thresholds. Defaults work for built-in mics at normal distance. */
-  vadConfig?: VadConfig;
 }
 
 interface UseVoiceConversation {
@@ -75,11 +72,19 @@ const WS_OPEN_TIMEOUT_MS = 10_000;
 // Safety cap so a runaway reply can't queue an unbounded number of TTS calls.
 const MAX_SPEAK_CHARS = 1_500;
 
+function float32ToPCM(float32: Float32Array): ArrayBuffer {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out.buffer;
+}
+
 export function useVoiceConversation({
   token,
   onUserMessage,
   onAssistantMessage,
-  vadConfig,
 }: UseVoiceConversationArgs): UseVoiceConversation {
   const [phase, setPhaseState] = useState<VoicePhase>("idle");
   const [partialTranscript, setPartialTranscript] = useState("");
@@ -99,7 +104,6 @@ export function useVoiceConversation({
   const ttsPrimedRef = useRef(false);
   const playerRef = useRef<TtsStreamPlayer | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const vadGateRef = useRef<VadGate | null>(null);
   // STT session timeout: auto-end so a parked tab can't rack Assembly cost.
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -171,10 +175,6 @@ export function useVoiceConversation({
       processorRef.current.onaudioprocess = null;
       processorRef.current.disconnect();
       processorRef.current = null;
-    }
-    if (vadGateRef.current) {
-      vadGateRef.current.destroy();
-      vadGateRef.current = null;
     }
     if (captureCtxRef.current && captureCtxRef.current.state !== "closed") {
       captureCtxRef.current.close().catch(() => {});
@@ -362,7 +362,6 @@ export function useVoiceConversation({
         playerRef.current = null;
         abortRef.current = null;
         setPhase("listening"); // recoverable failure: keep the mic open
-        vadGateRef.current?.reset();
         return;
       }
 
@@ -373,7 +372,6 @@ export function useVoiceConversation({
       playerRef.current = null;
       abortRef.current = null;
       if (isStopped()) return;
-      vadGateRef.current?.reset();
       setPhase("listening");
     },
     [
@@ -419,31 +417,13 @@ export function useVoiceConversation({
           const processor = ctx.createScriptProcessor(4096, 1, 1);
           processorRef.current = processor;
 
-          // VAD gate: only forward audio to Assembly when the user is speaking.
-          // Silence is never sent, cutting billing by 70-90%.
-          // Assembly's own end_of_turn is the authoritative signal for when
-          // the user finished speaking - VAD must NOT trigger turns.
-          const gate = createVadGate(
-            cfg.sampleRate,
-            4096,
-            {
-              onSpeechEnd: () => { /* VAD trail hold expired, but Assembly decides turn boundaries */ },
-              onSilenceTimeout: () => {
-                if (phaseRef.current === "idle" || phaseRef.current === "error") return;
-                setPhase("idle");
-                setError("Mic paused — no speech detected for a while. Tap to resume.");
-                teardown();
-              },
-            },
-            vadConfig,
-          );
-          vadGateRef.current = gate;
-
+          // Forward all audio to Assembly. Assembly's own endpoint detection
+          // handles turn boundaries and silence — it was flawless before VAD.
           processor.onaudioprocess = (e) => {
             if (phaseRef.current !== "listening") return;
             if (ws.readyState !== WebSocket.OPEN) return;
-            const pcms = gate.process(e.inputBuffer.getChannelData(0));
-            if (pcms) for (const pcm of pcms) ws.send(pcm);
+            const pcm = float32ToPCM(e.inputBuffer.getChannelData(0));
+            ws.send(pcm);
           };
           source.connect(processor);
           processor.connect(ctx.destination);
