@@ -408,11 +408,6 @@ export default function AuthPage() {
               </button>
             </form>
           </div>
-
-          <p className="text-center text-caption text-muted-soft mt-lg">
-            Demo account: <span className="font-medium">demo@yaarhelp.in</span> /{" "}
-            <span className="font-medium">demo123</span>
-          </p>
         </div>
       </section>
     </main>
